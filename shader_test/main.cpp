@@ -15,7 +15,7 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 	load_opengl_extensions();
 
 	int test_shader = create_shader_vf("test.vert", "test.frag");
-	Shader shader = shader_from_file("shader.glsl", SHADER_VERTEX|SHADER_PIXEL);
+	int shader = create_shader_vf("shader.vert", "shader.frag");
 
 	GLuint frame_texture;
 	glGenTextures(1, &frame_texture);
@@ -55,10 +55,10 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 			-1.0, 1.0,
 		};
 
-		use_shader(&shader);
-		int u_time = glGetUniformLocation(shader.gl_program, "time");
+		use_shader(shader);
+		int u_time = glGetUniformLocation(shader_progs[shader].prog, "time");
 		glUniform1f(u_time, rain.time_s);
-		int u_pos = glGetAttribLocation(shader.gl_program, "vertex_position");
+		int u_pos = glGetAttribLocation(shader_progs[shader].prog, "vertex_position");
 		glEnableVertexAttribArray(u_pos);
 		glVertexAttribPointer(u_pos, 2, GL_FLOAT, GL_FALSE, 0, verts);
 		glDrawArrays(GL_TRIANGLES, 0, 6);
