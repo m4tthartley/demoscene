@@ -1,5 +1,7 @@
 #version 330
 
+uniform float time;
+
 #define PI 3.14159265359
 #define PI2 (3.14159265359*2.0)
 #define saturate(x) clamp(x, 0.0, 1.0)
@@ -28,8 +30,6 @@ struct Lighting {
 Lighting lighting;
 
 #include "pbr.glsl"
-
-uniform float time;
 
 // smoothstep = f*f*(3.0-2.0*f)
 
@@ -278,6 +278,7 @@ float smooth_union(float a, float b, float k = 1.0) {
 	// return min(a, b);
 
 	// Exponential
+	// k*=32;
 	// float res = exp(-k*a) + exp(-k*b);
 	// return -log(res)/k;
 
@@ -286,6 +287,7 @@ float smooth_union(float a, float b, float k = 1.0) {
 	return mix(b, a, h) - k*h*(1.0-h);
 
 	// Power smooth
+	// k*=8;
 	// a = pow(a, k);
 	// b = pow(b, k);
 	// return pow((a*b)/(a+b), 1.0/k);
@@ -368,16 +370,16 @@ SceneResult scene(vec3 pos) {
 	a = smooth_union(a, sphere(pos, stuff[5]*vec3(sin(fbm(stuff[5])+time*1.5), sin(fbm(stuff[5])+time*1.5), sin(fbm(stuff[5])+time*1.5))));
 	a = smooth_union(a, sphere(pos, stuff[6]*vec3(sin(fbm(stuff[6])+time*1.6), sin(fbm(stuff[6])+time*1.6), sin(fbm(stuff[6])+time*1.6))));
 	a = smooth_union(a, sphere(pos, stuff[7]*vec3(sin(fbm(stuff[7])+time*1.7), sin(fbm(stuff[7])+time*1.7), sin(fbm(stuff[7])+time*1.7))));
-	SceneResult res = SceneResult(a, pos, /* Material(vec3(0.2, 0.1, 1.0), 0.4, 0.7) */Material(vec3(1.0, 1.0, 1.0), 0.5, 0.7));
+	SceneResult res = SceneResult(a, pos, /* Material(vec3(0.2, 0.1, 1.0), 0.4, 0.7) */Material(vec3(1.0, 1.0, 1.0), 0.0, 1.0));
 
-	Material m = Material(vec3(1.0, 0.5, 0.5), 0.5, 0.0);
+	Material m = Material(vec3(1.0, 1.0, 1.0), 0.0, 0.0);
 	Material sand = Material(vec3(0.2, 0.2, 0.05), 1.0, 0.0);
-	res = sr_union(res, SceneResult(plane(pos, vec4(-1.0, 0.0, 0.0, 20.0)), pos, m));
-	res = sr_union(res, SceneResult(plane(pos, vec4(1.0, 0.0, 0.0, 20.0)), pos, m));
-	res = sr_union(res, SceneResult(plane(pos, vec4(0.0, -1.0, 0.0, 5.0 /* - noise(pos+noise(pos+10.0))*0.1 */)), pos, sand));
+	res = sr_union(res, SceneResult(plane(pos, vec4(-1.0, 0.0, 0.0, 20.0)), pos, Material(vec3(1.0, 0.0, 0.0), 0.0, 0.0)));
+	res = sr_union(res, SceneResult(plane(pos, vec4(1.0, 0.0, 0.0, 20.0)), pos, Material(vec3(0.0, 1.0, 0.0), 0.0, 0.0)));
+	res = sr_union(res, SceneResult(plane(pos, vec4(0.0, -1.0, 0.0, 5.0 /* - noise(pos)*0.1 */)), pos, Material(vec3(1.0), 0.5, 0.0)));
 	res = sr_union(res, SceneResult(plane(pos, vec4(0.0, 1.0, 0.0, 5.0)), pos, m));
-	res = sr_union(res, SceneResult(plane(pos, vec4(0.0, 0.0, -1.0, 20.0)), pos, m));
-	res = sr_union(res, SceneResult(plane(pos, vec4(0.0, 0.0, 1.0, 20.0)), pos, m));
+	res = sr_union(res, SceneResult(plane(pos, vec4(0.0, 0.0, -1.0, 20.0)), pos, Material(vec3(0.0, 0.0, 1.0), 0.0, 0.0)));
+	res = sr_union(res, SceneResult(plane(pos, vec4(0.0, 0.0, 1.0, 20.0)), pos, Material(vec3(1.0, 0.0, 1.0), 0.0, 0.0)));
 	return res;
 
 	// return cube(p, vec3(1.0*sin(time), 1.0*cos(time), 0.0));
@@ -423,7 +425,7 @@ SceneResult ray_march(Camera camera, vec3 ray) {
 	float pixel_radius = 0.001;
 	vec3 pos;
 	SceneResult sr;
-	for (int i = 0; i < 100; ++i) {
+	for (int i = 0; i < 200; ++i) {
 		pos = camera.pos + t*ray;
 		sr = scene(pos);
 		float signed_radius = 1.0 * sr.depth;
@@ -476,6 +478,7 @@ void main() {
 		float t = time;
 		Camera camera;
 		camera.pos = vec3(sin(t)*10.0, sin(fract(time*0.25)*PI2)*4.0, cos(t)*10.0);
+		// camera.pos = vec3(sin(t)*10.0, 0.0, cos(t)*10.0);
 		// camera.pos = vec3(sin(t)*20.0, sin(fract(time*0.1)*PI2)*10.0, cos(t)*20.0);
 		// camera.pos = vec3(0.0, 0.0, 10.0);
 		vec3 f = normalize(vec3(0.0) - camera.pos);
@@ -506,14 +509,14 @@ void main() {
 			vec3 r = reflect(normalize(pos-camera.pos), normal);
 			Camera r_cam;
 			r_cam.pos = pos;
-			reflection = ray_march(camera, r);
+			reflection = ray_march(r_cam, r);
 
 			r = reflection.pos;
 			vec3 r_normal = normalize(vec3(scene(vec3(r.x + epsilon, r.y, r.z)).depth - scene(vec3(r.x - epsilon, r.y, r.z)).depth,
 										   scene(vec3(r.x, r.y + epsilon, r.z)).depth - scene(vec3(r.x, r.y - epsilon, r.z)).depth,
 										   scene(vec3(r.x, r.y, r.z + epsilon)).depth - scene(vec3(r.x, r.y, r.z - epsilon)).depth));
 
-			reflect_color = light_it(r, r_normal, r_cam, reflection.mat, vec3(0.0));
+			reflect_color = light_it(r, r_normal, r_cam, reflection.mat, vec3(0.0), false);
 		}
 
 		// float modulate = 1.0;
