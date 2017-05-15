@@ -19,6 +19,14 @@ const int num_devices = 100;
 
 struct SynthVstPlugin : public AudioEffectX {
 
+	/*DeviceTypes device_id;
+	char *name;
+	char *title;
+	int num_params;
+	ParamInfo *param_names;
+	float *param_defaults;
+	bool is_instrument;*/
+
 	SynthDevice devices[num_devices];
 	FILE *debug_file;
 	char progname[64];
@@ -46,18 +54,21 @@ struct SynthVstPlugin : public AudioEffectX {
 
 		if (audioMaster) {
 			//setNumInputs(0);
- #ifdef VST_INSTRUMENT
- 			setNumInputs(0);
- #endif
- #ifdef VST_EFFECT
- 			setNumInputs(2);
- #endif
+
+#ifdef VST_INSTRUMENT
+				setNumInputs(0);
+#endif
+#ifdef VST_EFFECT
+				setNumInputs(2);
+#endif
+
 			setNumOutputs(num_outputs);
 			canProcessReplacing();
+
 #ifdef VST_INSTRUMENT
-			//canProcessReplacing();
-			isSynth();
+				isSynth();
 #endif
+
 			setUniqueID('Mt53');
 		}
 

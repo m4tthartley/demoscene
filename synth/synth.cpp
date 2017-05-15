@@ -72,12 +72,34 @@ float feedloop_param_defaults[] = {
 	0.5f,
 	0.5f,
 };
+enum LowpassParams {
+	LOWPASS_PARAM_REZ,
+	LOWPASS_PARAM_FREQ,
+
+	LOWPASS_PARAM_MAX,
+};
+float lowpass_param_defaults[] = {
+	0.5f,
+	0.5f,
+};
+enum DelayParams {
+	DELAY_PARAM_FEEDBACK,
+	DELAY_PARAM_TIME,
+
+	DELAY_PARAM_MAX,
+};
+float delay_param_defaults[] = {
+	0.5f,
+	0.5f,
+};
 
 enum DeviceTypes {
 	DEVICE_TYPE_OSC,
 	DEVICE_TYPE_NOISE,
 	DEVICE_TYPE_REVERB,
 	DEVICE_TYPE_FEEDLOOP,
+	DEVICE_TYPE_LOWPASS,
+	DEVICE_TYPE_DELAY,
 };
 
 enum NoteStage {
@@ -100,16 +122,37 @@ struct Note {
 	float saw;
 };
 
+struct Sample {
+	union {
+		struct {
+			float left;
+			float right;
+		};
+		struct {
+			float l;
+			float r;
+		};
+	};
+};
+
+#define MAX_PARAMS 16
 struct SynthDevice {
 	DeviceTypes type;
-	float params[16]; // note: max 16 parameters
+	float params[MAX_PARAMS]; // note: max 16 parameters
 	Note notes[NOTES_MAX];
 	float rolling_sample_buffer[40];
 	int rolling_sample_index;
-	float delay_line[delay_line_size];
+	/*float delay_line[delay_line_size];
 	int delay_index;
 	float delay_line2[delay_line_size2];
-	int delay_index2;
+	int delay_index2;*/
+
+	Sample filter_in_buffer[10];
+	int filter_index; 
+	Sample filter_out_buffer[10];
+
+	Sample delay_line[sample_rate];
+	int delay_index;
 };
 
 struct SynthChannel {
@@ -153,19 +196,6 @@ void synth_init() {
 
 }
 
-struct Sample{
-	union {
-		struct {
-			float left;
-			float right;
-		};
-		struct {
-			float l;
-			float r;
-		};
-	};
-};
-
 struct Comb {
 	float *buffer;
 	int size;
@@ -187,41 +217,91 @@ struct Allpass {
 //float dry = 0.0f;
 //float allpass_feedback = 0.5f;
 
-Comb comb1_l = {(float*)malloc(sizeof(float) * (1116)), (1116)};
-Comb comb1_r = {(float*)malloc(sizeof(float) * (1116 + 23)), (1116 + 23)};
+Comb init_comb(int size) {
+	Comb result = {};
+	result.buffer = (float*)calloc(size, sizeof(float));
+	result.size = size;
+	return result;
+}
 
-Comb comb2_l = {(float*)malloc(sizeof(float) * (1188)), (1188)};
-Comb comb2_r = {(float*)malloc(sizeof(float) * (1188 + 23)), (1188 + 23)};
+Allpass init_allpass(int size) {
+	Allpass result = {};
+	result.buffer = (float*)calloc(size, sizeof(float));
+	result.size = size;
+	return result;
+}
 
-Comb comb3_l = {(float*)malloc(sizeof(float) * (1277)), (1277)};
-Comb comb3_r = {(float*)malloc(sizeof(float) * (1277 + 23)), (1277 + 23)};
+Comb comb1_l = init_comb(1116);
+Comb comb1_r = init_comb(1116 + 23);
 
-Comb comb4_l = {(float*)malloc(sizeof(float) * (1356)), (1356)};
-Comb comb4_r = {(float*)malloc(sizeof(float) * (1356 + 23)), (1356 + 23)};
+Comb comb2_l = init_comb(1188);
+Comb comb2_r = init_comb(1188 + 23);
 
-Comb comb5_l = {(float*)malloc(sizeof(float) * (1422)), (1422)};
-Comb comb5_r = {(float*)malloc(sizeof(float) * (1422 + 23)), (1422 + 23)};
+Comb comb3_l = init_comb(1277);
+Comb comb3_r = init_comb(1277 + 23);
 
-Comb comb6_l = {(float*)malloc(sizeof(float) * (1491)), (1491)};
-Comb comb6_r = {(float*)malloc(sizeof(float) * (1491 + 23)), (1491 + 23)};
+Comb comb4_l = init_comb(1356);
+Comb comb4_r = init_comb(1356 + 23);
 
-Comb comb7_l = {(float*)malloc(sizeof(float) * (1557)), (1557)};
-Comb comb7_r = {(float*)malloc(sizeof(float) * (1557 + 23)), (1557 + 23)};
+Comb comb5_l = init_comb(1422);
+Comb comb5_r = init_comb(1422 + 23);
 
-Comb comb8_l = {(float*)malloc(sizeof(float) * (1617)), (1617)};
-Comb comb8_r = {(float*)malloc(sizeof(float) * (1617 + 23)), (1617 + 23)};
+Comb comb6_l = init_comb(1491);
+Comb comb6_r = init_comb(1491 + 23);
 
-Allpass allpass1_l = {(float*)malloc(sizeof(float) * (556)), (556)};
-Allpass allpass1_r = {(float*)malloc(sizeof(float) * (556 + 23)), (556 + 23)};
+Comb comb7_l = init_comb(1557);
+Comb comb7_r = init_comb(1557 + 23);
 
-Allpass allpass2_l = {(float*)malloc(sizeof(float) * (441)), (441)};
-Allpass allpass2_r = {(float*)malloc(sizeof(float) * (441 + 23)), (441 + 23)};
+Comb comb8_l = init_comb(1617);
+Comb comb8_r = init_comb(1617 + 23);
 
-Allpass allpass3_l = {(float*)malloc(sizeof(float) * (341)), (341)};
-Allpass allpass3_r = {(float*)malloc(sizeof(float) * (341 + 23)), (341 + 23)};
+Allpass allpass1_l = init_allpass(556);
+Allpass allpass1_r = init_allpass(556 + 23);
 
-Allpass allpass4_l = {(float*)malloc(sizeof(float) * (225)), (225)};
-Allpass allpass4_r = {(float*)malloc(sizeof(float) * (225 + 23)), (225 + 23)};
+Allpass allpass2_l = init_allpass(441);
+Allpass allpass2_r = init_allpass(441 + 23);
+
+Allpass allpass3_l = init_allpass(341);
+Allpass allpass3_r = init_allpass(341 + 23);
+
+Allpass allpass4_l = init_allpass(225);
+Allpass allpass4_r = init_allpass(225 + 23);
+
+//Comb comb1_l = {(float*)malloc(sizeof(float) * (1116)), (1116)};
+//Comb comb1_r = {(float*)malloc(sizeof(float) * (1116 + 23)), (1116 + 23)};
+//
+//Comb comb2_l = {(float*)malloc(sizeof(float) * (1188)), (1188)};
+//Comb comb2_r = {(float*)malloc(sizeof(float) * (1188 + 23)), (1188 + 23)};
+//
+//Comb comb3_l = {(float*)malloc(sizeof(float) * (1277)), (1277)};
+//Comb comb3_r = {(float*)malloc(sizeof(float) * (1277 + 23)), (1277 + 23)};
+//
+//Comb comb4_l = {(float*)malloc(sizeof(float) * (1356)), (1356)};
+//Comb comb4_r = {(float*)malloc(sizeof(float) * (1356 + 23)), (1356 + 23)};
+//
+//Comb comb5_l = {(float*)malloc(sizeof(float) * (1422)), (1422)};
+//Comb comb5_r = {(float*)malloc(sizeof(float) * (1422 + 23)), (1422 + 23)};
+//
+//Comb comb6_l = {(float*)malloc(sizeof(float) * (1491)), (1491)};
+//Comb comb6_r = {(float*)malloc(sizeof(float) * (1491 + 23)), (1491 + 23)};
+//
+//Comb comb7_l = {(float*)malloc(sizeof(float) * (1557)), (1557)};
+//Comb comb7_r = {(float*)malloc(sizeof(float) * (1557 + 23)), (1557 + 23)};
+//
+//Comb comb8_l = {(float*)malloc(sizeof(float) * (1617)), (1617)};
+//Comb comb8_r = {(float*)malloc(sizeof(float) * (1617 + 23)), (1617 + 23)};
+//
+//Allpass allpass1_l = {(float*)malloc(sizeof(float) * (556)), (556)};
+//Allpass allpass1_r = {(float*)malloc(sizeof(float) * (556 + 23)), (556 + 23)};
+//
+//Allpass allpass2_l = {(float*)malloc(sizeof(float) * (441)), (441)};
+//Allpass allpass2_r = {(float*)malloc(sizeof(float) * (441 + 23)), (441 + 23)};
+//
+//Allpass allpass3_l = {(float*)malloc(sizeof(float) * (341)), (341)};
+//Allpass allpass3_r = {(float*)malloc(sizeof(float) * (341 + 23)), (341 + 23)};
+//
+//Allpass allpass4_l = {(float*)malloc(sizeof(float) * (225)), (225)};
+//Allpass allpass4_r = {(float*)malloc(sizeof(float) * (225 + 23)), (225 + 23)};
 
 float comb_process(SynthDevice *device, Comb *comb, float in) {
 	float feedback = (device->params[REVERB_PARAM_ROOM_SIZE]) + device->params[REVERB_PARAM_ROOM_OFFSET];
@@ -455,6 +535,53 @@ void synth_go(SynthDevice *device, SampleOffset samples, Sample *in, Sample *out
 				device->delay_index -= array_size(device->delay_line);
 			}
 #endif
+		}
+
+		if (device->type == DEVICE_TYPE_LOWPASS) {
+			if (device->params[LOWPASS_PARAM_FREQ] < 0.01) device->params[LOWPASS_PARAM_FREQ] = 0.01;
+
+			float r = 0.1f + device->params[LOWPASS_PARAM_REZ]*(sqrt(2.0f)-0.1f);
+			float f = device->params[LOWPASS_PARAM_FREQ] * (float)(sample_rate/2);
+			float c = 1.0f / tanf(PI * f / (float)sample_rate);
+			float a1 = 1.0f / (1.0f + r*c + c*c);
+			float a2 = 2.0f*a1;
+			float a3 = a1;
+			float b1 = 2.0f * (1.0f - c*c) * a1;
+			float b2 = (1.0f - r*c + c*c) * a1;
+
+			int index1 = device->filter_index-1;
+			if (index1 < 0) index1 += array_size(device->filter_in_buffer);
+			int index2 = device->filter_index-2;
+			if (index2 < 0) index2 += array_size(device->filter_in_buffer);
+			Sample in_1 = device->filter_in_buffer[index1];
+			Sample in_2 = device->filter_in_buffer[index2];
+			Sample out_1 = device->filter_out_buffer[index1];
+			Sample out_2 = device->filter_out_buffer[index2];
+
+			Sample o = {
+				a1*in[i].l + a2*in_1.l + a3*in_2.l - b1*out_1.l - b2*out_2.l,
+				a1*in[i].r + a2*in_1.r + a3*in_2.r - b1*out_1.r - b2*out_2.r,
+			};
+
+			device->filter_in_buffer[device->filter_index] = in[i];
+			device->filter_out_buffer[device->filter_index] = o;
+			if (++device->filter_index >= array_size(device->filter_in_buffer)) device->filter_index = 0;
+
+			out[i] = o;
+		}
+
+		if (device->type == DEVICE_TYPE_DELAY) {
+			int index = device->delay_index - (1 + (float)array_size(device->delay_line)*device->params[DELAY_PARAM_TIME]);
+			if (index < 0) index += array_size(device->delay_line);
+
+			device->delay_line[index].l *= device->params[DELAY_PARAM_FEEDBACK];
+			device->delay_line[index].r *= device->params[DELAY_PARAM_FEEDBACK];
+			out[i] = {in[i].l + device->delay_line[index].l,
+					  in[i].r + device->delay_line[index].r};
+
+			device->delay_line[device->delay_index].l += in[i].l;
+			device->delay_line[device->delay_index].r += in[i].r;
+			if (++device->delay_index >= array_size(device->delay_line)) device->delay_index = 0;
 		}
 
 		if (device->type == DEVICE_TYPE_FEEDLOOP) {
