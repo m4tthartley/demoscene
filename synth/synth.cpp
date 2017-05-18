@@ -139,6 +139,92 @@ struct Sample {
 			float r;
 		};
 	};
+
+	Sample operator+(Sample a) {
+		return {l+a.l, r+a.r};
+	}
+	Sample operator+(float a) {
+		return{l+a, r+a};
+	}
+	Sample operator-(Sample a) {
+		return{l-a.l, r-a.r};
+	}
+	Sample operator-(float a) {
+		return{l-a, r-a};
+	}
+	Sample operator*(Sample a) {
+		return{l*a.l, r*a.r};
+	}
+	Sample operator*(float a) {
+		return{l*a, r*a};
+	}
+	Sample operator/(Sample a) {
+		return{l/a.l, r/a.r};
+	}
+	Sample operator/(float a) {
+		return{l/a, r/a};
+	}
+
+	void operator+=(Sample a) {
+		l += a.l;
+		r += a.r;
+	}
+	void operator+=(float a) {
+		l += a;
+		r += a;
+	}
+	void operator-=(Sample a) {
+		l -= a.l;
+		r -= a.r;
+	}
+	void operator-=(float a) {
+		l -= a;
+		r -= a;
+	}
+	void operator*=(Sample a) {
+		l *= a.l;
+		r *= a.r;
+	}
+	void operator*=(float a) {
+		l *= a;
+		r *= a;
+	}
+	void operator/=(Sample a) {
+		l /= a.l;
+		r /= a.r;
+	}
+	void operator/=(float a) {
+		l /= a;
+		r /= a;
+	}
+};
+
+struct DelayLineMono {
+	float *buf;
+	int pos;
+	int size;
+
+	void init(int s) {
+		if (!buf) {
+			size = s;
+			buf = (float*)calloc(size, sizeof(float));
+			pos = 0;
+		}
+	}
+};
+
+struct DelayLine {
+	DelayLineMono l;
+	DelayLineMono r;
+
+	void init(int lsize, int rsize) {
+		l.init(lsize);
+		r.init(rsize);
+	}
+
+	/*DelayLine(int lsize, int rsize) {
+	init(lsize, rsize);
+	}*/
 };
 
 #define MAX_PARAMS 16
@@ -159,6 +245,10 @@ struct SynthDevice {
 
 	Sample delay_line[sample_rate];
 	int delay_index;
+
+	DelayLine comb[4];
+	DelayLine allpass[4];
+	Sample lowcut_filter;
 };
 
 struct SynthChannel {
@@ -343,37 +433,6 @@ Allpass allpass4_r = init_allpass(225 + 23);
 //	return result;
 //}
 
-struct DelayLineMono {
-	float *buf;
-	int pos;
-	int size;
-
-	void init(int s) {
-		if (!buf) {
-			size = s;
-			buf = (float*)calloc(size, sizeof(float));
-			pos = 0;
-		}
-	}
-};
-
-struct DelayLine {
-	DelayLineMono l;
-	DelayLineMono r;
-
-	void init(int lsize, int rsize) {
-		l.init(lsize);
-		r.init(rsize);
-	}
-
-	/*DelayLine(int lsize, int rsize) {
-		init(lsize, rsize);
-	}*/
-};
-
-DelayLine comb[4];
-DelayLine allpass[4];
-
 void synth_go(SynthDevice *device, SampleOffset samples, Sample *in, Sample *out) {
 	//static float sine = 0.0f;
 
@@ -497,14 +556,14 @@ void synth_go(SynthDevice *device, SampleOffset samples, Sample *in, Sample *out
 		}
 
 		if (device->type == DEVICE_TYPE_REVERB) {
-			comb[0].init(1309, 1327);
-			comb[1].init(1635, 1631);
-			comb[2].init(1811, 1833);
-			comb[3].init(1926, 1901);
-			allpass[0].init(220, 205);
-			allpass[1].init(74, 77);
-			static Sample combl[4] = {};
-			static Sample lowcut_filter = {};
+			device->comb[0].init(1309, 1327);
+			device->comb[1].init(1635, 1631);
+			device->comb[2].init(1811, 1833);
+			device->comb[3].init(1926, 1901);
+			device->allpass[0].init(220, 205);
+			device->allpass[1].init(74, 77);
+			//static Sample combl[4] = {};
+			/*static Sample lowcut_filter = {};*/
 
 			float damp = device->params[REVERB_PARAM_DAMP];
 			float gain = device->params[REVERB_PARAM_GAIN];
@@ -524,38 +583,38 @@ void synth_go(SynthDevice *device, SampleOffset samples, Sample *in, Sample *out
 			Sample inpt = {in[i].l * gain, in[i].r * gain};
 			Sample otpt = {};
 			for (int k = 0; k < 4; ++k) {
-				float dv = comb_gain[k] * comb[k].l.buf[comb[k].l.pos];
+				float dv = comb_gain[k] * device->comb[k].l.buf[device->comb[k].l.pos];
 				float nv = (k&1) ? (dv-inpt.l) : (dv+inpt.l);
 				float lp = damp * nv;
-				comb[k].l.buf[comb[k].l.pos] = lp;
-				if (++comb[k].l.pos == comb[k].l.size) comb[k].l.pos = 0;
+				device->comb[k].l.buf[device->comb[k].l.pos] = lp;
+				if (++device->comb[k].l.pos == device->comb[k].l.size) device->comb[k].l.pos = 0;
 				otpt.l += lp;
 
-				dv = comb_gain[k] * comb[k].r.buf[comb[k].r.pos];
+				dv = comb_gain[k] * device->comb[k].r.buf[device->comb[k].r.pos];
 				nv = (k&1) ? (dv-inpt.r) : (dv+inpt.r);
 				lp = damp * nv;
-				comb[k].r.buf[comb[k].r.pos] = lp;
-				if (++comb[k].r.pos == comb[k].r.size) comb[k].r.pos = 0;
+				device->comb[k].r.buf[device->comb[k].r.pos] = lp;
+				if (++device->comb[k].r.pos == device->comb[k].r.size) device->comb[k].r.pos = 0;
 				otpt.r += lp;
 			}
 			for (int k = 0; k < 2; ++k) {
-				float dv = allpass[k].l.buf[allpass[k].l.pos];
+				float dv = device->allpass[k].l.buf[device->allpass[k].l.pos];
 				float dz = otpt.l + allpass_gain[k] * dv;
-				allpass[k].l.buf[allpass[k].l.pos] = dz;
-				if (++allpass[k].l.pos == allpass[k].l.size) allpass[k].l.pos = 0;
+				device->allpass[k].l.buf[device->allpass[k].l.pos] = dz;
+				if (++device->allpass[k].l.pos == device->allpass[k].l.size) device->allpass[k].l.pos = 0;
 				otpt.l = dv - allpass_gain[k] * dz;
 
-				dv = allpass[k].r.buf[allpass[k].r.pos];
+				dv = device->allpass[k].r.buf[device->allpass[k].r.pos];
 				dz = otpt.r + allpass_gain[k] * dv;
-				allpass[k].r.buf[allpass[k].r.pos] = dz;
-				if (++allpass[k].r.pos == allpass[k].r.size) allpass[k].r.pos = 0;
+				device->allpass[k].r.buf[device->allpass[k].r.pos] = dz;
+				if (++device->allpass[k].r.pos == device->allpass[k].r.size) device->allpass[k].r.pos = 0;
 				otpt.r = dv - allpass_gain[k] * dz;
 			}
 
-			lowcut_filter.l += lowcut * (otpt.l - lowcut_filter.l);
-			lowcut_filter.r += lowcut * (otpt.r - lowcut_filter.r);
-			out[i].l = otpt.l - lowcut_filter.l;
-			out[i].r = otpt.r - lowcut_filter.r;
+			device->lowcut_filter.l += lowcut * (otpt.l - device->lowcut_filter.l);
+			device->lowcut_filter.r += lowcut * (otpt.r - device->lowcut_filter.r);
+			out[i].l = otpt.l - device->lowcut_filter.l;
+			out[i].r = otpt.r - device->lowcut_filter.r;
 
 #if 0
 			float wet1 = device->params[REVERB_PARAM_WET]*(1.0f/2.0f + 0.5f);
