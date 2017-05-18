@@ -187,6 +187,7 @@ struct SynthVstPlugin : public AudioEffectX {
 				if (status == 0x90 || status == 0x80) {
 					if (status == 0x90 && velocity != 0) {
 						synth_note_on(&devices[curProgram], note);
+						debug_print("note %i\n", note);
 					} else {
 						synth_note_off(&devices[curProgram], note);
 					}

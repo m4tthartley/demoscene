@@ -42,23 +42,29 @@ enum ReverbParams {
 	/*REVERB_PARAM_DELAY,
 	REVERB_PARAM_DECAY,*/
 	REVERB_PARAM_GAIN,
-	REVERB_PARAM_WET,
-	REVERB_PARAM_DRY,
-	REVERB_PARAM_FEEDBACK,
 	REVERB_PARAM_DAMP,
-	REVERB_PARAM_ROOM_SIZE,
-	REVERB_PARAM_ROOM_OFFSET,
+	REVERB_PARAM_LOWCUT,
+	//REVERB_PARAM_WET,
+	//REVERB_PARAM_DRY,
+	//REVERB_PARAM_FEEDBACK,
+	
+	//REVERB_PARAM_ROOM_SIZE,
+	//REVERB_PARAM_ROOM_OFFSET,
+	
 
 	REVERB_PARAM_MAX,
 };
 float reverb_param_defaults[] = {
-	0.015f,
+	0.5f,
+	0.5f,
+	0.5f,
+	/*0.015f,
 	1.0f,
 	0.0f,
 	0.5f,
 	0.2f,
 	0.14f,
-	0.7f,
+	0.7f,*/
 };
 enum FeedloopParams {
 	FEEDLOOP_PARAM_FEEDBACK1,
@@ -303,25 +309,25 @@ Allpass allpass4_r = init_allpass(225 + 23);
 //Allpass allpass4_l = {(float*)malloc(sizeof(float) * (225)), (225)};
 //Allpass allpass4_r = {(float*)malloc(sizeof(float) * (225 + 23)), (225 + 23)};
 
-float comb_process(SynthDevice *device, Comb *comb, float in) {
-	float feedback = (device->params[REVERB_PARAM_ROOM_SIZE]) + device->params[REVERB_PARAM_ROOM_OFFSET];
-	float damp1 = device->params[REVERB_PARAM_DAMP];
-	float damp2 = 1.0f-damp1;
-
-	float out = comb->buffer[comb->index];
-	comb->filter = (out*damp2) + (comb->filter*damp1);
-	comb->buffer[comb->index++] = in + (comb->filter*feedback);
-	if (comb->index >= comb->size) comb->index = 0;
-	return out;
-}
-
-float allpass_process(SynthDevice *device, Allpass *allpass, float in) {
-	float b = allpass->buffer[allpass->index];
-	float out = -in + b;
-	allpass->buffer[allpass->index++] = in + (b*device->params[REVERB_PARAM_FEEDBACK]);
-	if (allpass->index >= allpass->size) allpass->index = 0;
-	return out;
-}
+//float comb_process(SynthDevice *device, Comb *comb, float in) {
+//	float feedback = (device->params[REVERB_PARAM_ROOM_SIZE]) + device->params[REVERB_PARAM_ROOM_OFFSET];
+//	float damp1 = device->params[REVERB_PARAM_DAMP];
+//	float damp2 = 1.0f-damp1;
+//
+//	float out = comb->buffer[comb->index];
+//	comb->filter = (out*damp2) + (comb->filter*damp1);
+//	comb->buffer[comb->index++] = in + (comb->filter*feedback);
+//	if (comb->index >= comb->size) comb->index = 0;
+//	return out;
+//}
+//
+//float allpass_process(SynthDevice *device, Allpass *allpass, float in) {
+//	float b = allpass->buffer[allpass->index];
+//	float out = -in + b;
+//	allpass->buffer[allpass->index++] = in + (b*device->params[REVERB_PARAM_FEEDBACK]);
+//	if (allpass->index >= allpass->size) allpass->index = 0;
+//	return out;
+//}
 
 //Sample allpass_filter(SynthDevice *device, Sample in, float gain, float d) {
 //	Sample result = {};
@@ -336,6 +342,37 @@ float allpass_process(SynthDevice *device, Allpass *allpass, float in) {
 //
 //	return result;
 //}
+
+struct DelayLineMono {
+	float *buf;
+	int pos;
+	int size;
+
+	void init(int s) {
+		if (!buf) {
+			size = s;
+			buf = (float*)calloc(size, sizeof(float));
+			pos = 0;
+		}
+	}
+};
+
+struct DelayLine {
+	DelayLineMono l;
+	DelayLineMono r;
+
+	void init(int lsize, int rsize) {
+		l.init(lsize);
+		r.init(rsize);
+	}
+
+	/*DelayLine(int lsize, int rsize) {
+		init(lsize, rsize);
+	}*/
+};
+
+DelayLine comb[4];
+DelayLine allpass[4];
 
 void synth_go(SynthDevice *device, SampleOffset samples, Sample *in, Sample *out) {
 	//static float sine = 0.0f;
@@ -374,13 +411,16 @@ void synth_go(SynthDevice *device, SampleOffset samples, Sample *in, Sample *out
 			}
 			
 			if (device->type == DEVICE_TYPE_OSC) {
-				float pitch = 440.0f * powf(2.0f, (float)(j-45)/12.0f);
+				// from http://conspiracy.hu/articles/8/
+				// pitch_in_hz=440.0*pow(2.0,(note_number-45)/12.0);
+				float hz = 261.6255653006f *powf(2.0f, ((float)j-48.0f)/12.0f);
+
 				//double pitch = 440.0 * pow(2.0, (double)(j-45)/12.0);
-				note->sine += (pitch / (float)sample_rate) * PI2;
+				note->sine += (hz / (float)sample_rate) * PI2;
 				//note->sine += (pitch / (double)sample_rate) * PI2;
 				if (note->sine > PI2) note->sine -= PI2;
 
-				note->saw += (pitch / (float)sample_rate) * 2;
+				note->saw += (hz / (float)sample_rate) * 2;
 				if (note->saw >= 1.0f) note->saw -= 2.0f;
 
 				out[i].l += (sinf(note->sine) * device->params[OSC_PARAM_SINE_WAVE]) * env_vol /** params[PARAM_VOLUME].value*/;
@@ -457,6 +497,67 @@ void synth_go(SynthDevice *device, SampleOffset samples, Sample *in, Sample *out
 		}
 
 		if (device->type == DEVICE_TYPE_REVERB) {
+			comb[0].init(1309, 1327);
+			comb[1].init(1635, 1631);
+			comb[2].init(1811, 1833);
+			comb[3].init(1926, 1901);
+			allpass[0].init(220, 205);
+			allpass[1].init(74, 77);
+			static Sample combl[4] = {};
+			static Sample lowcut_filter = {};
+
+			float damp = device->params[REVERB_PARAM_DAMP];
+			float gain = device->params[REVERB_PARAM_GAIN];
+			float lowcut = device->params[REVERB_PARAM_LOWCUT];
+
+			float comb_gain[] = {
+				0.97f,
+				0.96f,
+				0.95f,
+				0.94f,
+			};
+			float allpass_gain[] = {
+				0.93f,
+				0.97f,
+			};
+
+			Sample inpt = {in[i].l * gain, in[i].r * gain};
+			Sample otpt = {};
+			for (int k = 0; k < 4; ++k) {
+				float dv = comb_gain[k] * comb[k].l.buf[comb[k].l.pos];
+				float nv = (k&1) ? (dv-inpt.l) : (dv+inpt.l);
+				float lp = damp * nv;
+				comb[k].l.buf[comb[k].l.pos] = lp;
+				if (++comb[k].l.pos == comb[k].l.size) comb[k].l.pos = 0;
+				otpt.l += lp;
+
+				dv = comb_gain[k] * comb[k].r.buf[comb[k].r.pos];
+				nv = (k&1) ? (dv-inpt.r) : (dv+inpt.r);
+				lp = damp * nv;
+				comb[k].r.buf[comb[k].r.pos] = lp;
+				if (++comb[k].r.pos == comb[k].r.size) comb[k].r.pos = 0;
+				otpt.r += lp;
+			}
+			for (int k = 0; k < 2; ++k) {
+				float dv = allpass[k].l.buf[allpass[k].l.pos];
+				float dz = otpt.l + allpass_gain[k] * dv;
+				allpass[k].l.buf[allpass[k].l.pos] = dz;
+				if (++allpass[k].l.pos == allpass[k].l.size) allpass[k].l.pos = 0;
+				otpt.l = dv - allpass_gain[k] * dz;
+
+				dv = allpass[k].r.buf[allpass[k].r.pos];
+				dz = otpt.r + allpass_gain[k] * dv;
+				allpass[k].r.buf[allpass[k].r.pos] = dz;
+				if (++allpass[k].r.pos == allpass[k].r.size) allpass[k].r.pos = 0;
+				otpt.r = dv - allpass_gain[k] * dz;
+			}
+
+			lowcut_filter.l += lowcut * (otpt.l - lowcut_filter.l);
+			lowcut_filter.r += lowcut * (otpt.r - lowcut_filter.r);
+			out[i].l = otpt.l - lowcut_filter.l;
+			out[i].r = otpt.r - lowcut_filter.r;
+
+#if 0
 			float wet1 = device->params[REVERB_PARAM_WET]*(1.0f/2.0f + 0.5f);
 			float wet2 = device->params[REVERB_PARAM_WET]*((1.0f-1.0f)/2.0f);
 
@@ -492,6 +593,7 @@ void synth_go(SynthDevice *device, SampleOffset samples, Sample *in, Sample *out
 
 			out[i].l = outl*wet1 + outr*wet2 + in[i].l*(device->params[REVERB_PARAM_DRY]*2.0f);
 			out[i].r = outr*wet1 + outl*wet2 + in[i].r*(device->params[REVERB_PARAM_DRY]*2.0f);
+#endif
 
 #if 0
 			float gain = 1.0f;
@@ -538,10 +640,10 @@ void synth_go(SynthDevice *device, SampleOffset samples, Sample *in, Sample *out
 		}
 
 		if (device->type == DEVICE_TYPE_LOWPASS) {
-			if (device->params[LOWPASS_PARAM_FREQ] < 0.01) device->params[LOWPASS_PARAM_FREQ] = 0.01;
+			if (device->params[LOWPASS_PARAM_FREQ] < 0.01) device->params[LOWPASS_PARAM_FREQ] = 0.001;
 
 			float r = 0.1f + device->params[LOWPASS_PARAM_REZ]*(sqrt(2.0f)-0.1f);
-			float f = device->params[LOWPASS_PARAM_FREQ] * (float)(sample_rate/2);
+			float f = powf(device->params[LOWPASS_PARAM_FREQ], 2.0f) * (float)(sample_rate/4.0f);
 			float c = 1.0f / tanf(PI * f / (float)sample_rate);
 			float a1 = 1.0f / (1.0f + r*c + c*c);
 			float a2 = 2.0f*a1;

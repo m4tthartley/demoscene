@@ -11,13 +11,14 @@ struct ParamInfo {
 	char *name;
 };
 ParamInfo param_info[] = {
-	{"Gain"},
-	{"Wet"},
-	{"Dry"},
-	{"Feedback"},
-	{"Damp"},
-	{"Room size"},
-	{"Room offset"},
+	{"GAIN"},
+	{"DAMP"},
+	{"LOWCUT"},
+	//{"Wet"},
+	//{"Dry"},
+	//{"Feedback"},
+	//{"Room size"},
+	//{"Room offset"},
 };
 
 #include "../vstlib.cpp"
