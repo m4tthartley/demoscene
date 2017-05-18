@@ -11,15 +11,14 @@ struct ParamInfo {
 	char *name;
 };
 ParamInfo param_info[] = {
-	{"Sine wave"},
-	{"Sine Attack"},
-	{"Sine Sustain"},
-	{"Sine Release"},
+	{"SINE"},
+	{"SAWTOOTH"},
+	{"TRIANGLE"},
+	{"SQUARE"},
 
-	{"Sawtooth wave"},
-	{"Sawtooth Attack"},
-	{"Sawtooth Sustain"},
-	{"Sawtooth Release"},
+	{"ATTACK"},
+	{"HOLD"},
+	{"RELEASE"},
 };
 
 #include "../vstlib.cpp"

@@ -14,15 +14,14 @@ const int delay_line_size = (int)((double)sample_rate / 5.0);
 const int delay_line_size2 = (int)((double)sample_rate / 10.0);
 
 enum OscParams {
-	OSC_PARAM_SINE_WAVE,
-	OSC_PARAM_SINE_ATTACK,
-	OSC_PARAM_SINE_SUSTAIN,
-	OSC_PARAM_SINE_RELEASE,
+	OSC_PARAM_SINE,
+	OSC_PARAM_SAW,
+	OSC_PARAM_TRI,
+	OSC_PARAM_SQUARE,
 
-	OSC_PARAM_SAW_WAVE,
-	OSC_PARAM_SAW_ATTACK,
-	OSC_PARAM_SAW_SUSTAIN,
-	OSC_PARAM_SAW_RELEASE,
+	OSC_PARAM_ATTACK,
+	OSC_PARAM_SUSTAIN,
+	OSC_PARAM_RELEASE,
 
 	OSC_PARAM_MAX,
 };
@@ -98,6 +97,25 @@ float delay_param_defaults[] = {
 	0.5f,
 	0.5f,
 };
+enum BeatitParams {
+	BEATIT_PARAM_WAVE,
+	BEATIT_PARAM_PITCH,
+	BEATIT_PARAM_PITCH_FALLOFF,
+	BEATIT_PARAM_ATTACK,
+	BEATIT_PARAM_ATTACK_START,
+	BEATIT_PARAM_RELEASE,
+	BEATIT_PARAM_NOISE,
+
+	BEATIT_PARAM_MAX,
+};
+float beatit_param_defaults[] = {
+	0.5f,
+	0.5f,
+	0.5f,
+	0.5f,
+	0.5f,
+	0.5f,
+};
 
 enum DeviceTypes {
 	DEVICE_TYPE_OSC,
@@ -106,6 +124,7 @@ enum DeviceTypes {
 	DEVICE_TYPE_FEEDLOOP,
 	DEVICE_TYPE_LOWPASS,
 	DEVICE_TYPE_DELAY,
+	DEVICE_TYPE_BEATIT,
 };
 
 enum NoteStage {
@@ -126,6 +145,8 @@ struct Note {
 	SampleOffset next_stage;
 	float sine;
 	float saw;
+	float tri;
+	float square;
 };
 
 struct Sample {
@@ -214,12 +235,31 @@ struct DelayLineMono {
 };
 
 struct DelayLine {
-	DelayLineMono l;
-	DelayLineMono r;
+	union {
+		struct {
+			DelayLineMono left;
+			DelayLineMono right;
+		};
+		struct {
+			DelayLineMono l;
+			DelayLineMono r;
+		};
+	};
 
 	void init(int lsize, int rsize) {
 		l.init(lsize);
 		r.init(rsize);
+	}
+
+	Sample load() {
+		return {left.buf[left.pos], right.buf[right.pos]};
+	}
+
+	void store(Sample s) {
+		left.buf[left.pos] = s.left;
+		right.buf[right.pos] = s.right;
+		if (++left.pos == left.size) left.pos = 0;
+		if (++right.pos == right.size) right.pos = 0;
 	}
 
 	/*DelayLine(int lsize, int rsize) {
@@ -238,6 +278,10 @@ struct SynthDevice {
 	int delay_index;
 	float delay_line2[delay_line_size2];
 	int delay_index2;*/
+
+	float env_attack;
+	float env_hold;
+	float env_release;
 
 	Sample filter_in_buffer[10];
 	int filter_index; 
@@ -271,10 +315,10 @@ void set_note_stage(SynthDevice *device, int note, NoteStage stage) {
 	float time = 0.0f;
 	switch (stage) {
 	case ENVELOPE_ATTACK:
-		time = device->params[OSC_PARAM_SINE_ATTACK];
+		time = device->env_attack;
 		break;
 	case ENVELOPE_RELEASE:
-		time = device->params[OSC_PARAM_SINE_RELEASE];
+		time = device->env_release;
 		break;
 	}
 	device->notes[note].next_stage = time*(float)sample_rate;
@@ -436,6 +480,17 @@ Allpass allpass4_r = init_allpass(225 + 23);
 void synth_go(SynthDevice *device, SampleOffset samples, Sample *in, Sample *out) {
 	//static float sine = 0.0f;
 
+	if (device->type == DEVICE_TYPE_OSC) {
+		device->env_attack = device->params[OSC_PARAM_ATTACK];
+		device->env_hold= device->params[OSC_PARAM_SUSTAIN];
+		device->env_release= device->params[OSC_PARAM_RELEASE];
+	}
+	if (device->type == DEVICE_TYPE_BEATIT) {
+		device->env_attack = device->params[BEATIT_PARAM_ATTACK];
+		//device->env_hold = device->params[OSC_PARAM_SUSTAIN];
+		device->env_release = device->params[BEATIT_PARAM_RELEASE];
+	}
+
 	for (int i = 0; i < samples; ++i) {
 		out[i] = {0.0f, 0.0f};
 
@@ -461,8 +516,10 @@ void synth_go(SynthDevice *device, SampleOffset samples, Sample *in, Sample *out
 				break;
 			case ENVELOPE_ATTACK:
 				env_vol = (float)note->cursor / (float)note->next_stage;
+				if (device->type == DEVICE_TYPE_BEATIT) env_vol = device->params[BEATIT_PARAM_ATTACK_START] + (1.0f-device->params[BEATIT_PARAM_ATTACK_START])*((float)note->cursor / (float)note->next_stage);
 				break;
 			case ENVELOPE_HOLD:
+				if (device->type == DEVICE_TYPE_BEATIT) set_note_stage(device, j, ENVELOPE_RELEASE);
 				break;
 			case ENVELOPE_RELEASE:
 				env_vol = 1.0f - ((float)note->cursor / (float)note->next_stage);
@@ -482,10 +539,23 @@ void synth_go(SynthDevice *device, SampleOffset samples, Sample *in, Sample *out
 				note->saw += (hz / (float)sample_rate) * 2;
 				if (note->saw >= 1.0f) note->saw -= 2.0f;
 
-				out[i].l += (sinf(note->sine) * device->params[OSC_PARAM_SINE_WAVE]) * env_vol /** params[PARAM_VOLUME].value*/;
-				out[i].r += (sinf(note->sine) * device->params[OSC_PARAM_SINE_WAVE]) * env_vol /** params[PARAM_VOLUME].value*/;
-				out[i].l += (note->saw * device->params[OSC_PARAM_SAW_WAVE]) * env_vol;
-				out[i].r += (note->saw * device->params[OSC_PARAM_SAW_WAVE]) * env_vol;
+				note->tri += (hz / (float)sample_rate) * 4;
+				if (note->tri > 3.0f) note->tri -= 4.0f;
+				float t = note->tri;
+				if (t > 1.0f) t = 1.0f-(t-1.0f);
+
+				note->square += (hz / (float)sample_rate) * 2.0f;
+				if (note->square > 2.0f) note->square -= 2.0f;
+				float sq = 1.0f;
+				if (note->square > 1.0f) sq = -1.0f;
+
+				out[i].l += (sinf(note->sine) * device->params[OSC_PARAM_SINE]) * env_vol /** params[PARAM_VOLUME].value*/;
+				out[i].r += (sinf(note->sine) * device->params[OSC_PARAM_SINE]) * env_vol /** params[PARAM_VOLUME].value*/;
+				out[i].l += (note->saw * device->params[OSC_PARAM_SAW]) * env_vol;
+				out[i].r += (note->saw * device->params[OSC_PARAM_SAW]) * env_vol;
+
+				out[i] += Sample{t, t} * device->params[OSC_PARAM_TRI] * env_vol;
+				out[i] += Sample{sq, sq} *device->params[OSC_PARAM_SQUARE] * env_vol;
 
 				/*if (note->stage != ENVELOPE_OFF) {
 					float env_vol = 1.0f;
@@ -511,7 +581,14 @@ void synth_go(SynthDevice *device, SampleOffset samples, Sample *in, Sample *out
 				}*/
 			}
 
-			
+			if (device->type == DEVICE_TYPE_BEATIT) {
+				float hz = 261.6255653006f *powf(2.0f, (((float)j + (device->params[BEATIT_PARAM_PITCH]-0.5f)*64.0f)-48.0f)/12.0f);
+				note->sine += (hz / (float)sample_rate) * PI2;
+				if (note->sine > PI2) note->sine -= PI2;
+
+				float s = sinf(note->sine);
+				out[i] += Sample{s, s}*env_vol*device->params[BEATIT_PARAM_WAVE] * (device->params[BEATIT_PARAM_NOISE]*env_vol*(rand_float()));
+			}
 		}
 
 		if (device->type == DEVICE_TYPE_NOISE) {
@@ -583,38 +660,40 @@ void synth_go(SynthDevice *device, SampleOffset samples, Sample *in, Sample *out
 			Sample inpt = {in[i].l * gain, in[i].r * gain};
 			Sample otpt = {};
 			for (int k = 0; k < 4; ++k) {
-				float dv = comb_gain[k] * device->comb[k].l.buf[device->comb[k].l.pos];
-				float nv = (k&1) ? (dv-inpt.l) : (dv+inpt.l);
-				float lp = damp * nv;
-				device->comb[k].l.buf[device->comb[k].l.pos] = lp;
-				if (++device->comb[k].l.pos == device->comb[k].l.size) device->comb[k].l.pos = 0;
-				otpt.l += lp;
+				Sample dv = device->comb[k].load() * comb_gain[k];
+				Sample nv = (k&1) ? (dv-inpt) : (dv+inpt);
+				Sample lp = nv * damp;
+				//device->comb[k].l.buf[device->comb[k].l.pos] = lp;
+				//if (++device->comb[k].l.pos == device->comb[k].l.size) device->comb[k].l.pos = 0;
+				device->comb[k].store(lp);
+				otpt += lp;
 
-				dv = comb_gain[k] * device->comb[k].r.buf[device->comb[k].r.pos];
+				/*dv = comb_gain[k] * device->comb[k].r.buf[device->comb[k].r.pos];
 				nv = (k&1) ? (dv-inpt.r) : (dv+inpt.r);
 				lp = damp * nv;
 				device->comb[k].r.buf[device->comb[k].r.pos] = lp;
 				if (++device->comb[k].r.pos == device->comb[k].r.size) device->comb[k].r.pos = 0;
-				otpt.r += lp;
+				otpt.r += lp;*/
 			}
 			for (int k = 0; k < 2; ++k) {
-				float dv = device->allpass[k].l.buf[device->allpass[k].l.pos];
-				float dz = otpt.l + allpass_gain[k] * dv;
-				device->allpass[k].l.buf[device->allpass[k].l.pos] = dz;
-				if (++device->allpass[k].l.pos == device->allpass[k].l.size) device->allpass[k].l.pos = 0;
-				otpt.l = dv - allpass_gain[k] * dz;
+				Sample dv = device->allpass[k].load();
+				Sample dz = otpt + dv*allpass_gain[k];
+				device->allpass[k].store(dz);
+				/*device->allpass[k].l.buf[device->allpass[k].l.pos] = dz;
+				if (++device->allpass[k].l.pos == device->allpass[k].l.size) device->allpass[k].l.pos = 0;*/
+				otpt = dv - dz*allpass_gain[k];
 
-				dv = device->allpass[k].r.buf[device->allpass[k].r.pos];
+				/*dv = device->allpass[k].r.buf[device->allpass[k].r.pos];
 				dz = otpt.r + allpass_gain[k] * dv;
 				device->allpass[k].r.buf[device->allpass[k].r.pos] = dz;
 				if (++device->allpass[k].r.pos == device->allpass[k].r.size) device->allpass[k].r.pos = 0;
-				otpt.r = dv - allpass_gain[k] * dz;
+				otpt.r = dv - allpass_gain[k] * dz;*/
 			}
 
-			device->lowcut_filter.l += lowcut * (otpt.l - device->lowcut_filter.l);
-			device->lowcut_filter.r += lowcut * (otpt.r - device->lowcut_filter.r);
-			out[i].l = otpt.l - device->lowcut_filter.l;
-			out[i].r = otpt.r - device->lowcut_filter.r;
+			device->lowcut_filter += (otpt - device->lowcut_filter) * lowcut;
+			//device->lowcut_filter.r += lowcut * (otpt.r - device->lowcut_filter.r);
+			out[i] = otpt - device->lowcut_filter;
+			//out[i].r = otpt.r - device->lowcut_filter.r;
 
 #if 0
 			float wet1 = device->params[REVERB_PARAM_WET]*(1.0f/2.0f + 0.5f);
