@@ -26,8 +26,8 @@ enum OscParams {
 	OSC_PARAM_MAX,
 };
 float osc_param_defaults[] = {
-	0.5f, 0.5f, 0.5f, 0.5f,
-	0.0f, 0.5f, 0.5f, 0.5f,
+	0.5f, 0.0f, 0.0f, 0.0f,
+	0.5f, 0.5f, 0.5f
 };
 enum NoiseParams {
 	NOISE_PARAM_VOLUME,
@@ -97,18 +97,24 @@ float delay_param_defaults[] = {
 	0.5f,
 	0.5f,
 };
-enum BeatitParams {
-	BEATIT_PARAM_WAVE,
-	BEATIT_PARAM_PITCH,
-	BEATIT_PARAM_PITCH_FALLOFF,
-	BEATIT_PARAM_ATTACK,
-	BEATIT_PARAM_ATTACK_START,
-	BEATIT_PARAM_RELEASE,
-	BEATIT_PARAM_NOISE,
+enum DrumParams {
+	DRUM_PARAM_WAVE,
+	DRUM_PARAM_PITCH,
+	DRUM_PARAM_PITCH_FALLOFF,
 
-	BEATIT_PARAM_MAX,
+	DRUM_PARAM_ATTACK,
+	DRUM_PARAM_ATTACK_START,
+	DRUM_PARAM_RELEASE,
+	DRUM_PARAM_NOISE,
+
+	DRUM_PARAM_PITCH_ATTACK,
+	DRUM_PARAM_PITCH_RELEASE,
+
+	DRUM_PARAM_MAX,
 };
-float beatit_param_defaults[] = {
+float drum_param_defaults[] = {
+	0.5f,
+	0.5f,
 	0.5f,
 	0.5f,
 	0.5f,
@@ -116,6 +122,8 @@ float beatit_param_defaults[] = {
 	0.5f,
 	0.5f,
 };
+
+struct SynthDevice;
 
 enum DeviceTypes {
 	DEVICE_TYPE_OSC,
@@ -127,7 +135,7 @@ enum DeviceTypes {
 	DEVICE_TYPE_BEATIT,
 };
 
-enum NoteStage {
+enum EnvelopeStage {
 	ENVELOPE_OFF,
 	ENVELOPE_ATTACK,
 	ENVELOPE_HOLD,
@@ -139,15 +147,39 @@ float default_stage_times[] = {
 	1.0f,
 	0.5f,
 };
+struct EnvelopeOptions {
+	float attack;
+	float release;
+	float hold;
+};
+struct Envelope {
+	EnvelopeStage stage;
+	float cursor;
+	//float next_stage;
+
+	void set_stage(SynthDevice *device, EnvelopeStage stage);
+	float update(SynthDevice *device, EnvelopeOptions env);
+};
+
 struct Note {
-	NoteStage stage;
-	SampleOffset cursor;
-	SampleOffset next_stage;
+	Envelope env;
+	Envelope env2;
+
 	float sine;
 	float saw;
 	float tri;
 	float square;
 };
+
+void synth_note_on(SynthDevice *device, Note *note) {
+	note->env.set_stage(device, ENVELOPE_ATTACK);
+	note->env2.set_stage(device, ENVELOPE_ATTACK);
+}
+
+void synth_note_off(SynthDevice *device, Note *note) {
+	note->env.set_stage(device, ENVELOPE_RELEASE);
+	note->env2.set_stage(device, ENVELOPE_RELEASE);
+}
 
 struct Sample {
 	union {
@@ -261,10 +293,6 @@ struct DelayLine {
 		if (++left.pos == left.size) left.pos = 0;
 		if (++right.pos == right.size) right.pos = 0;
 	}
-
-	/*DelayLine(int lsize, int rsize) {
-	init(lsize, rsize);
-	}*/
 };
 
 #define MAX_PARAMS 16
@@ -279,9 +307,9 @@ struct SynthDevice {
 	float delay_line2[delay_line_size2];
 	int delay_index2;*/
 
-	float env_attack;
+	/*float env_attack;
 	float env_hold;
-	float env_release;
+	float env_release;*/
 
 	Sample filter_in_buffer[10];
 	int filter_index; 
@@ -299,6 +327,68 @@ struct SynthChannel {
 	SynthDevice devices[16]; // note: max 16 devices
 };
 
+float Envelope::update(SynthDevice *device, EnvelopeOptions env) {
+	float env_vol = 1.0f;
+
+	float end;
+	switch (stage) {
+	case ENVELOPE_ATTACK:
+		end = env.attack;
+		break;
+	case ENVELOPE_RELEASE:
+		end = env.release;
+		break;
+	}
+
+	if (stage == ENVELOPE_ATTACK || stage == ENVELOPE_RELEASE) {
+		if (cursor >= end) {
+			if (stage == ENVELOPE_RELEASE) {
+				set_stage(device, ENVELOPE_OFF);
+			} else {
+				set_stage(device, (EnvelopeStage)(stage+1));
+			}
+			cursor -= end;
+		}
+		cursor += (1.0f / (float)sample_rate);
+	}
+
+	switch (stage) {
+	case ENVELOPE_OFF:
+		//continue;
+		env_vol = 0.0f;
+		break;
+	case ENVELOPE_ATTACK:
+		env_vol = (float)cursor / (float)end;
+		if (device->type == DEVICE_TYPE_BEATIT) env_vol = device->params[DRUM_PARAM_ATTACK_START] + (1.0f-device->params[DRUM_PARAM_ATTACK_START])*((float)cursor / (float)end);
+		break;
+	case ENVELOPE_HOLD:
+		if (device->type == DEVICE_TYPE_BEATIT) set_stage(device, ENVELOPE_RELEASE);
+		break;
+	case ENVELOPE_RELEASE:
+		env_vol = 1.0f - ((float)cursor / (float)end);
+		break;
+	}
+
+	return env_vol;
+}
+void Envelope::set_stage(SynthDevice *device, EnvelopeStage s) {
+	stage = s;
+	cursor = 0;
+
+	//{
+	//	float time = 0.0f;
+	//	switch (/*note->env.*/stage) {
+	//	case ENVELOPE_ATTACK:
+	//		time = device->env_attack;
+	//		break;
+	//	case ENVELOPE_RELEASE:
+	//		time = device->env_release;
+	//		break;
+	//	}
+	//	next_stage = time*(float)sample_rate;
+	//}
+}
+
 //float synth_sine_mix = 0.5f;
 //float synth_sine_attack = 0.1f;
 //float synth_sine_sustain = 0.5f;
@@ -308,29 +398,6 @@ struct SynthChannel {
 //float synth_saw_sustain = 0.5f;
 //float synth_saw_release = 0.5f;
 //float synth_volume = 0.5f;
-
-void set_note_stage(SynthDevice *device, int note, NoteStage stage) {
-	device->notes[note].stage = stage;
-	device->notes[note].cursor = 0;
-	float time = 0.0f;
-	switch (stage) {
-	case ENVELOPE_ATTACK:
-		time = device->env_attack;
-		break;
-	case ENVELOPE_RELEASE:
-		time = device->env_release;
-		break;
-	}
-	device->notes[note].next_stage = time*(float)sample_rate;
-}
-
-void synth_note_on(SynthDevice *device, int note) {
-	set_note_stage(device, note, ENVELOPE_ATTACK);
-}
-
-void synth_note_off(SynthDevice *device, int note) {
-	set_note_stage(device, note, ENVELOPE_RELEASE);
-}
 
 void synth_init() {
 
@@ -480,53 +547,30 @@ Allpass allpass4_r = init_allpass(225 + 23);
 void synth_go(SynthDevice *device, SampleOffset samples, Sample *in, Sample *out) {
 	//static float sine = 0.0f;
 
-	if (device->type == DEVICE_TYPE_OSC) {
+	float master_vol = 0.25f;
+
+	/*if (device->type == DEVICE_TYPE_OSC) {
 		device->env_attack = device->params[OSC_PARAM_ATTACK];
 		device->env_hold= device->params[OSC_PARAM_SUSTAIN];
 		device->env_release= device->params[OSC_PARAM_RELEASE];
 	}
 	if (device->type == DEVICE_TYPE_BEATIT) {
-		device->env_attack = device->params[BEATIT_PARAM_ATTACK];
-		//device->env_hold = device->params[OSC_PARAM_SUSTAIN];
-		device->env_release = device->params[BEATIT_PARAM_RELEASE];
-	}
+		device->env_attack = device->params[DRUM_PARAM_ATTACK];
+		device->env_release = device->params[DRUM_PARAM_RELEASE];
+	}*/
 
 	for (int i = 0; i < samples; ++i) {
 		out[i] = {0.0f, 0.0f};
 
 		for (int j = 0; j < NOTES_MAX; ++j) {
 			Note *note = &device->notes[j];
-			float env_vol = 1.0f;
 
-			if (note->stage != ENVELOPE_OFF && note->stage != ENVELOPE_HOLD) {
-				if (note->cursor >= note->next_stage) {
-					if (note->stage == ENVELOPE_RELEASE) {
-						set_note_stage(device, j, ENVELOPE_OFF);
-					} else {
-						set_note_stage(device, j, (NoteStage)(note->stage+1));
-					}
-					note->cursor -= note->next_stage;
-				}
-				++note->cursor;
-			}
-
-			switch (note->stage) {
-			case ENVELOPE_OFF:
-				continue;
-				break;
-			case ENVELOPE_ATTACK:
-				env_vol = (float)note->cursor / (float)note->next_stage;
-				if (device->type == DEVICE_TYPE_BEATIT) env_vol = device->params[BEATIT_PARAM_ATTACK_START] + (1.0f-device->params[BEATIT_PARAM_ATTACK_START])*((float)note->cursor / (float)note->next_stage);
-				break;
-			case ENVELOPE_HOLD:
-				if (device->type == DEVICE_TYPE_BEATIT) set_note_stage(device, j, ENVELOPE_RELEASE);
-				break;
-			case ENVELOPE_RELEASE:
-				env_vol = 1.0f - ((float)note->cursor / (float)note->next_stage);
-				break;
-			}
+			if (note->env.stage == ENVELOPE_OFF) continue;
 			
 			if (device->type == DEVICE_TYPE_OSC) {
+				EnvelopeOptions env = {device->params[OSC_PARAM_ATTACK], device->params[OSC_PARAM_RELEASE]};
+				float env_vol = note->env.update(device, env);
+
 				// from http://conspiracy.hu/articles/8/
 				// pitch_in_hz=440.0*pow(2.0,(note_number-45)/12.0);
 				float hz = 261.6255653006f *powf(2.0f, ((float)j-48.0f)/12.0f);
@@ -549,13 +593,13 @@ void synth_go(SynthDevice *device, SampleOffset samples, Sample *in, Sample *out
 				float sq = 1.0f;
 				if (note->square > 1.0f) sq = -1.0f;
 
-				out[i].l += (sinf(note->sine) * device->params[OSC_PARAM_SINE]) * env_vol /** params[PARAM_VOLUME].value*/;
-				out[i].r += (sinf(note->sine) * device->params[OSC_PARAM_SINE]) * env_vol /** params[PARAM_VOLUME].value*/;
-				out[i].l += (note->saw * device->params[OSC_PARAM_SAW]) * env_vol;
-				out[i].r += (note->saw * device->params[OSC_PARAM_SAW]) * env_vol;
+				out[i].l += (sinf(note->sine) * device->params[OSC_PARAM_SINE]) * env_vol * master_vol;
+				out[i].r += (sinf(note->sine) * device->params[OSC_PARAM_SINE]) * env_vol * master_vol;
+				out[i].l += (note->saw * device->params[OSC_PARAM_SAW]) * env_vol * master_vol;
+				out[i].r += (note->saw * device->params[OSC_PARAM_SAW]) * env_vol * master_vol;
 
-				out[i] += Sample{t, t} * device->params[OSC_PARAM_TRI] * env_vol;
-				out[i] += Sample{sq, sq} *device->params[OSC_PARAM_SQUARE] * env_vol;
+				out[i] += Sample{t, t} * device->params[OSC_PARAM_TRI] * env_vol * master_vol;
+				out[i] += Sample{sq, sq} *device->params[OSC_PARAM_SQUARE] * env_vol * master_vol;
 
 				/*if (note->stage != ENVELOPE_OFF) {
 					float env_vol = 1.0f;
@@ -582,12 +626,21 @@ void synth_go(SynthDevice *device, SampleOffset samples, Sample *in, Sample *out
 			}
 
 			if (device->type == DEVICE_TYPE_BEATIT) {
-				float hz = 261.6255653006f *powf(2.0f, (((float)j + (device->params[BEATIT_PARAM_PITCH]-0.5f)*64.0f)-48.0f)/12.0f);
+				EnvelopeOptions env = {device->params[DRUM_PARAM_ATTACK], device->params[DRUM_PARAM_RELEASE]};
+				float env_vol = note->env.update(device, env);
+
+				env = {device->params[DRUM_PARAM_PITCH_ATTACK], device->params[DRUM_PARAM_PITCH_RELEASE]};
+				float env_pitch = note->env2.update(device, env);
+
+				//float p = (env_vol*64.0f*device->params[DRUM_PARAM_PITCH_FALLOFF]) + (device->params[DRUM_PARAM_PITCH]-0.5f)*64.0f;
+				float p = (64.0f*device->params[DRUM_PARAM_PITCH_FALLOFF]*env_pitch) + (device->params[DRUM_PARAM_PITCH]-0.5f)*64.0f;
+				float hz = 261.6255653006f *powf(2.0f, (((float)j + p)-48.0f)/12.0f);
 				note->sine += (hz / (float)sample_rate) * PI2;
 				if (note->sine > PI2) note->sine -= PI2;
 
 				float s = sinf(note->sine);
-				out[i] += Sample{s, s}*env_vol*device->params[BEATIT_PARAM_WAVE] * (device->params[BEATIT_PARAM_NOISE]*env_vol*(rand_float()));
+				// * (device->params[BEATIT_PARAM_NOISE]*env_vol*(rand_float()))
+				out[i] += Sample{s, s}*env_vol*device->params[DRUM_PARAM_WAVE] * master_vol;
 			}
 		}
 
@@ -623,8 +676,8 @@ void synth_go(SynthDevice *device, SampleOffset samples, Sample *in, Sample *out
 			static float smooth = 0.0f;
 			smooth = smooth - (0.025f * (smooth - in[i].l));
 
-			out[i].l = in[i].l + (smooth * (rand_float()*2.0f-1.0f));
-			out[i].r = in[i].r + (smooth * (rand_float()*2.0f-1.0f));
+			out[i].l = in[i].l + ((rand_float()*2.0f-1.0f)*device->params[NOISE_PARAM_VOLUME]) * master_vol;
+			out[i].r = in[i].r + ((rand_float()*2.0f-1.0f)*device->params[NOISE_PARAM_VOLUME]) * master_vol;
 			//left[i] = inleft[i] + (avg /** (rand_float()*2.0f-1.0f)*/ * device->params[NOISE_PARAM_VOLUME]);
 			//right[i] = inright[i] + (avg /** (rand_float()*2.0f-1.0f)*/ * device->params[NOISE_PARAM_VOLUME]);
 
@@ -663,11 +716,11 @@ void synth_go(SynthDevice *device, SampleOffset samples, Sample *in, Sample *out
 				Sample dv = device->comb[k].load() * comb_gain[k];
 				Sample nv = (k&1) ? (dv-inpt) : (dv+inpt);
 				Sample lp = nv * damp;
+				device->comb[k].store(lp);
+				otpt += lp; // todo: is this right? surly you want nv without the damp for this?
 				//device->comb[k].l.buf[device->comb[k].l.pos] = lp;
 				//if (++device->comb[k].l.pos == device->comb[k].l.size) device->comb[k].l.pos = 0;
-				device->comb[k].store(lp);
-				otpt += lp;
-
+				
 				/*dv = comb_gain[k] * device->comb[k].r.buf[device->comb[k].r.pos];
 				nv = (k&1) ? (dv-inpt.r) : (dv+inpt.r);
 				lp = damp * nv;
@@ -829,7 +882,8 @@ void synth_go(SynthDevice *device, SampleOffset samples, Sample *in, Sample *out
 				Note *note = &device->notes[j];
 				float env_vol = 1.0f;
 
-				if (note->stage != ENVELOPE_OFF && note->stage != ENVELOPE_HOLD) {
+				// todo: this actually needs this to work
+				/*if (note->stage != ENVELOPE_OFF && note->stage != ENVELOPE_HOLD) {
 					if (note->cursor >= note->next_stage) {
 						if (note->stage == ENVELOPE_RELEASE) {
 							set_note_stage(device, j, ENVELOPE_OFF);
@@ -853,7 +907,9 @@ void synth_go(SynthDevice *device, SampleOffset samples, Sample *in, Sample *out
 				case ENVELOPE_RELEASE:
 					env_vol = 1.0f - ((float)note->cursor / (float)note->next_stage);
 					break;
-				}
+				}*/
+				if (note->env.stage == ENVELOPE_OFF) continue;
+				env_vol = 0.0f;
 
 				float pitch = 440.0f * powf(2.0f, (float)(j-45)/12.0f);
 				note->sine += (pitch / (float)sample_rate) * PI2;
@@ -861,8 +917,8 @@ void synth_go(SynthDevice *device, SampleOffset samples, Sample *in, Sample *out
 
 				float s1 = sinf(sinf(note->sine) * note->sine);
 				float s2 = sinf(sinf(s1 * note->sine) * note->sine);
-				out[i].l += s2 * 0.5f * env_vol;
-				out[i].r += s2 * 0.5f * env_vol;
+				out[i].l += s2 * 0.5f * env_vol * master_vol;
+				out[i].r += s2 * 0.5f * env_vol * master_vol;
 			}
 		}
 
@@ -880,4 +936,17 @@ void synth_go(SynthDevice *device, SampleOffset samples, Sample *in, Sample *out
 			++right;
 		}
 	}*/
+}
+
+// for testing
+int main() {
+	SynthDevice device = {};
+	device.params[OSC_PARAM_ATTACK] = 0.1f;
+	device.params[OSC_PARAM_RELEASE] = 0.1f;
+	device.type = DEVICE_TYPE_OSC;
+	synth_note_on(&device, &device.notes[60]);
+	Sample *out = (Sample*)calloc(10000, sizeof(Sample));
+	synth_go(&device, 10000, NULL, out);
+	synth_note_off(&device, &device.notes[60]);
+	synth_go(&device, 10000, NULL, out);
 }

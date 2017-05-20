@@ -15,7 +15,7 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Lowpass", "Lowpass\Lowpass.
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Delay", "Delay\Delay.vcxproj", "{BFF6162C-C646-4A7F-86A0-57BFA34F64D4}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Beatit", "Beatit\Beatit.vcxproj", "{C5C79B19-8013-4303-86FB-3942193CF952}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Beatit", "Beatit\beatit.vcxproj", "{C5C79B19-8013-4303-86FB-3942193CF952}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
