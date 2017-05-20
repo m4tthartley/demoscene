@@ -13,6 +13,7 @@ struct ParamInfo {
 ParamInfo param_info[] = {
 	{"Resonance"},
 	{"Freq"},
+	{"HighFreq"},
 };
 
 #include "../vstlib.cpp"

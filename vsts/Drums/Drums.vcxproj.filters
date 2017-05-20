@@ -15,6 +15,9 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="drums.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\vstsdk\audioeffect.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -22,9 +25,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\vstsdk\vstplugmain.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="drums.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

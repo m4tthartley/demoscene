@@ -22,6 +22,9 @@ ParamInfo param_info[] = {
 
 	{"PITCH ATTACK"},
 	{"PITCH RELEASE"},
+
+	{"NOISE ATTACK"},
+	{"NOISE RELEASE"},
 };
 
 #include "../vstlib.cpp"

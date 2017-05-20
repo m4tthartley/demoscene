@@ -80,12 +80,14 @@ float feedloop_param_defaults[] = {
 enum LowpassParams {
 	LOWPASS_PARAM_REZ,
 	LOWPASS_PARAM_FREQ,
+	HIGHPASS_PARAM_FREQ,
 
 	LOWPASS_PARAM_MAX,
 };
 float lowpass_param_defaults[] = {
 	0.5f,
 	0.5f,
+	0.0f,
 };
 enum DelayParams {
 	DELAY_PARAM_FEEDBACK,
@@ -110,9 +112,14 @@ enum DrumParams {
 	DRUM_PARAM_PITCH_ATTACK,
 	DRUM_PARAM_PITCH_RELEASE,
 
+	DRUM_PARAM_NOISE_ATTACK,
+	DRUM_PARAM_NOISE_RELEASE,
+
 	DRUM_PARAM_MAX,
 };
 float drum_param_defaults[] = {
+	0.5f,
+	0.5f,
 	0.5f,
 	0.5f,
 	0.5f,
@@ -164,6 +171,7 @@ struct Envelope {
 struct Note {
 	Envelope env;
 	Envelope env2;
+	Envelope env3;
 
 	float sine;
 	float saw;
@@ -174,11 +182,13 @@ struct Note {
 void synth_note_on(SynthDevice *device, Note *note) {
 	note->env.set_stage(device, ENVELOPE_ATTACK);
 	note->env2.set_stage(device, ENVELOPE_ATTACK);
+	note->env3.set_stage(device, ENVELOPE_ATTACK);
 }
 
 void synth_note_off(SynthDevice *device, Note *note) {
 	note->env.set_stage(device, ENVELOPE_RELEASE);
 	note->env2.set_stage(device, ENVELOPE_RELEASE);
+	note->env3.set_stage(device, ENVELOPE_RELEASE);
 }
 
 struct Sample {
@@ -264,6 +274,13 @@ struct DelayLineMono {
 			pos = 0;
 		}
 	}
+
+	float load(int offset) {
+		int i = pos+offset;
+		if (i < 0) i += size;
+		if (i >= size) i -= size;
+		return buf[i];
+	}
 };
 
 struct DelayLine {
@@ -283,8 +300,17 @@ struct DelayLine {
 		r.init(rsize);
 	}
 
+	void init(int s) {
+		l.init(s);
+		r.init(s);
+	}
+
 	Sample load() {
 		return {left.buf[left.pos], right.buf[right.pos]};
+	}
+
+	Sample load(int offset) {
+		return{left.load(offset), right.load(offset)};
 	}
 
 	void store(Sample s) {
@@ -292,6 +318,95 @@ struct DelayLine {
 		right.buf[right.pos] = s.right;
 		if (++left.pos == left.size) left.pos = 0;
 		if (++right.pos == right.size) right.pos = 0;
+	}
+};
+
+struct Filter {
+	float rez;
+	float low_freq;
+	float high_freq;
+
+	enum Mode {
+		LOW,
+		HIGH,
+	};
+	Mode mode;
+	DelayLine in_delay;
+	DelayLine out_delay;
+
+	float l;
+	float b;
+
+	Sample low(Sample in) {
+		float r = 0.1f + rez*(sqrt(2.0f)-0.1f);
+		float f = powf(low_freq, 2.0f) * (float)(sample_rate/4.0f);
+
+		float c = 1.0f / tanf(PI * f / (float)sample_rate);
+		float a1 = 1.0f / (1.0f + r*c + c*c);
+		float a2 = 2.0f*a1;
+		float a3 = a1;
+		float b1 = 2.0f * (1.0f - c*c) * a1;
+		float b2 = (1.0f - r*c + c*c) * a1;
+
+		/*int index1 = device->filter_index-1;
+		if (index1 < 0) index1 += array_size(device->filter_in_buffer);
+		int index2 = device->filter_index-2;
+		if (index2 < 0) index2 += array_size(device->filter_in_buffer);
+		Sample in_1 = device->filter_in_buffer[index1];
+		Sample in_2 = device->filter_in_buffer[index2];
+		Sample out_1 = device->filter_out_buffer[index1];
+		Sample out_2 = device->filter_out_buffer[index2];*/
+
+		in_delay.store(in);
+		Sample out = in*a1 + in_delay.load(-1)*a2 + in_delay.load(-2)*a3 - out_delay.load(-1)*b1 - out_delay.load(-2)*b2;
+		out_delay.store(out);
+
+		//{
+		//	in_delay.load(0)*a1 + a2*in_1 + a3*in_2 - b1*out_1 - b2*out_2,
+		//	//a1*in[i] + a2*in_1 + a3*in_2 - b1*out_1 - b2*out_2,
+		//};
+
+		/*device->filter_in_buffer[device->filter_index] = in[i];
+		device->filter_out_buffer[device->filter_index] = o;
+		if (++device->filter_index >= array_size(device->filter_in_buffer)) device->filter_index = 0;*/
+
+		return out;
+	}
+
+	Sample high(Sample in) {
+		/*float r = 0.1f + rez*(sqrt(2.0f)-0.1f);
+		float f = powf(high_freq, 1.0f) * (float)(sample_rate/4.0f);
+
+		float c = tanf(PI * f / (float)sample_rate);
+		float a1 = 1.0f / (1.0f + r*c + c*c);
+		float a2 = -2.0f*a1;
+		float a3 = a1;
+		float b1 = 2.0f * (c*c - 1.0f) * a1;
+		float b2 = (1.0f - r*c + c*c) * a1;
+
+		in_delay.store(in);
+		Sample out = in*a1 + in_delay.load(-1)*a2 + in_delay.load(-2)*a3 - out_delay.load(-1)*b1 - out_delay.load(-2)*b2;
+		out_delay.store(out);
+		return out;*/
+
+		float f = powf(high_freq, 2.0f) * 3.0f;
+
+		l += f * b;
+		float h = in.left - b*rez - 1.0f;
+		b += f * h;
+		return{h, h};
+	}
+
+	Sample process(Sample in) {
+		in_delay.init(3);
+		out_delay.init(3);
+
+		switch (mode) {
+		case LOW:
+			return low(in);
+		case HIGH:
+			return high(in);
+		}
 	}
 };
 
@@ -321,6 +436,9 @@ struct SynthDevice {
 	DelayLine comb[4];
 	DelayLine allpass[4];
 	Sample lowcut_filter;
+
+	Filter low_filter;
+	Filter high_filter;
 };
 
 struct SynthChannel {
@@ -544,7 +662,7 @@ Allpass allpass4_r = init_allpass(225 + 23);
 //	return result;
 //}
 
-void synth_go(SynthDevice *device, SampleOffset samples, Sample *in, Sample *out) {
+void synth_go(SynthDevice *device, SampleOffset samples, float **inbuf, float **outbuf /*Sample *in, Sample *out*/) {
 	//static float sine = 0.0f;
 
 	float master_vol = 0.25f;
@@ -560,7 +678,15 @@ void synth_go(SynthDevice *device, SampleOffset samples, Sample *in, Sample *out
 	}*/
 
 	for (int i = 0; i < samples; ++i) {
-		out[i] = {0.0f, 0.0f};
+		//out[i] = {0.0f, 0.0f};
+		/*outbuf[0][i] = 0.0f;
+		outbuf[1][i] = 0.0f;*/
+
+		Sample out = {};
+		Sample in = {};
+		if (inbuf && inbuf[0] && inbuf[1]) {
+			in = {inbuf[0][i], inbuf[1][i]};
+		}
 
 		for (int j = 0; j < NOTES_MAX; ++j) {
 			Note *note = &device->notes[j];
@@ -593,13 +719,13 @@ void synth_go(SynthDevice *device, SampleOffset samples, Sample *in, Sample *out
 				float sq = 1.0f;
 				if (note->square > 1.0f) sq = -1.0f;
 
-				out[i].l += (sinf(note->sine) * device->params[OSC_PARAM_SINE]) * env_vol * master_vol;
-				out[i].r += (sinf(note->sine) * device->params[OSC_PARAM_SINE]) * env_vol * master_vol;
-				out[i].l += (note->saw * device->params[OSC_PARAM_SAW]) * env_vol * master_vol;
-				out[i].r += (note->saw * device->params[OSC_PARAM_SAW]) * env_vol * master_vol;
+				out.l += (sinf(note->sine) * device->params[OSC_PARAM_SINE]) * env_vol * master_vol;
+				out.r += (sinf(note->sine) * device->params[OSC_PARAM_SINE]) * env_vol * master_vol;
+				out.l += (note->saw * device->params[OSC_PARAM_SAW]) * env_vol * master_vol;
+				out.r += (note->saw * device->params[OSC_PARAM_SAW]) * env_vol * master_vol;
 
-				out[i] += Sample{t, t} * device->params[OSC_PARAM_TRI] * env_vol * master_vol;
-				out[i] += Sample{sq, sq} *device->params[OSC_PARAM_SQUARE] * env_vol * master_vol;
+				out += Sample{t, t} * device->params[OSC_PARAM_TRI] * env_vol * master_vol;
+				out += Sample{sq, sq} *device->params[OSC_PARAM_SQUARE] * env_vol * master_vol;
 
 				/*if (note->stage != ENVELOPE_OFF) {
 					float env_vol = 1.0f;
@@ -632,6 +758,9 @@ void synth_go(SynthDevice *device, SampleOffset samples, Sample *in, Sample *out
 				env = {device->params[DRUM_PARAM_PITCH_ATTACK], device->params[DRUM_PARAM_PITCH_RELEASE]};
 				float env_pitch = note->env2.update(device, env);
 
+				env = {device->params[DRUM_PARAM_NOISE_ATTACK], device->params[DRUM_PARAM_NOISE_RELEASE]};
+				float env_noise = note->env3.update(device, env);
+
 				//float p = (env_vol*64.0f*device->params[DRUM_PARAM_PITCH_FALLOFF]) + (device->params[DRUM_PARAM_PITCH]-0.5f)*64.0f;
 				float p = (64.0f*device->params[DRUM_PARAM_PITCH_FALLOFF]*env_pitch) + (device->params[DRUM_PARAM_PITCH]-0.5f)*64.0f;
 				float hz = 261.6255653006f *powf(2.0f, (((float)j + p)-48.0f)/12.0f);
@@ -640,7 +769,7 @@ void synth_go(SynthDevice *device, SampleOffset samples, Sample *in, Sample *out
 
 				float s = sinf(note->sine);
 				// * (device->params[BEATIT_PARAM_NOISE]*env_vol*(rand_float()))
-				out[i] += Sample{s, s}*env_vol*device->params[DRUM_PARAM_WAVE] * master_vol;
+				out += Sample{s, s}*env_vol*device->params[DRUM_PARAM_WAVE] * master_vol + ((rand_float()*2.0f-1.0f)*device->params[DRUM_PARAM_NOISE]*env_noise*master_vol);
 			}
 		}
 
@@ -667,24 +796,26 @@ void synth_go(SynthDevice *device, SampleOffset samples, Sample *in, Sample *out
 			avg += left[index+4];
 			avg /= 9.0f;*/
 
-			float avg = 0.0f;
+			/*float avg = 0.0f;
 			for (int j = 0; j < array_size(device->rolling_sample_buffer); ++j) {
 				avg += fabs(device->rolling_sample_buffer[j]);
 			}
 			avg /= (float)array_size(device->rolling_sample_buffer);
 
 			static float smooth = 0.0f;
-			smooth = smooth - (0.025f * (smooth - in[i].l));
+			smooth = smooth - (0.025f * (smooth - in[i].l));*/
 
-			out[i].l = in[i].l + ((rand_float()*2.0f-1.0f)*device->params[NOISE_PARAM_VOLUME]) * master_vol;
-			out[i].r = in[i].r + ((rand_float()*2.0f-1.0f)*device->params[NOISE_PARAM_VOLUME]) * master_vol;
+			/*out[i].l = in[i].l + ((rand_float()*2.0f-1.0f)*device->params[NOISE_PARAM_VOLUME]) * master_vol;
+			out[i].r = in[i].r + ((rand_float()*2.0f-1.0f)*device->params[NOISE_PARAM_VOLUME]) * master_vol;*/
 			//left[i] = inleft[i] + (avg /** (rand_float()*2.0f-1.0f)*/ * device->params[NOISE_PARAM_VOLUME]);
 			//right[i] = inright[i] + (avg /** (rand_float()*2.0f-1.0f)*/ * device->params[NOISE_PARAM_VOLUME]);
 
-			device->rolling_sample_buffer[device->rolling_sample_index++] = in[i].l;
-			if (device->rolling_sample_index >= array_size(device->rolling_sample_buffer)) device->rolling_sample_index -= array_size(device->rolling_sample_buffer);
-		}
+			/*device->rolling_sample_buffer[device->rolling_sample_index++] = in[i].l;
+			if (device->rolling_sample_index >= array_size(device->rolling_sample_buffer)) device->rolling_sample_index -= array_size(device->rolling_sample_buffer);*/
 
+			out = in + ((rand_float()*2.0f-1.0f)*device->params[NOISE_PARAM_VOLUME]) * master_vol;
+		}
+#if 0
 		if (device->type == DEVICE_TYPE_REVERB) {
 			device->comb[0].init(1309, 1327);
 			device->comb[1].init(1635, 1631);
@@ -830,38 +961,88 @@ void synth_go(SynthDevice *device, SampleOffset samples, Sample *in, Sample *out
 #endif
 		}
 
+#endif
 		if (device->type == DEVICE_TYPE_LOWPASS) {
-			if (device->params[LOWPASS_PARAM_FREQ] < 0.01) device->params[LOWPASS_PARAM_FREQ] = 0.001;
+			
+			if (device->params[LOWPASS_PARAM_FREQ] < 0.02f) device->params[LOWPASS_PARAM_FREQ] = 0.02f;
+			if (device->params[HIGHPASS_PARAM_FREQ] < 0.01f) device->params[HIGHPASS_PARAM_FREQ] = 0.01f;
+			/*
+						float r = 0.1f + device->params[LOWPASS_PARAM_REZ]*(sqrt(2.0f)-0.1f);
+						float f = powf(device->params[LOWPASS_PARAM_FREQ], 2.0f) * (float)(sample_rate/4.0f);
+						float c = 1.0f / tanf(PI * f / (float)sample_rate);
+						float a1 = 1.0f / (1.0f + r*c + c*c);
+						float a2 = 2.0f*a1;
+						float a3 = a1;
+						float b1 = 2.0f * (1.0f - c*c) * a1;
+						float b2 = (1.0f - r*c + c*c) * a1;
 
-			float r = 0.1f + device->params[LOWPASS_PARAM_REZ]*(sqrt(2.0f)-0.1f);
-			float f = powf(device->params[LOWPASS_PARAM_FREQ], 2.0f) * (float)(sample_rate/4.0f);
-			float c = 1.0f / tanf(PI * f / (float)sample_rate);
-			float a1 = 1.0f / (1.0f + r*c + c*c);
-			float a2 = 2.0f*a1;
-			float a3 = a1;
-			float b1 = 2.0f * (1.0f - c*c) * a1;
-			float b2 = (1.0f - r*c + c*c) * a1;
+						int index1 = device->filter_index-1;
+						if (index1 < 0) index1 += array_size(device->filter_in_buffer);
+						int index2 = device->filter_index-2;
+						if (index2 < 0) index2 += array_size(device->filter_in_buffer);
+						Sample in_1 = device->filter_in_buffer[index1];
+						Sample in_2 = device->filter_in_buffer[index2];
+						Sample out_1 = device->filter_out_buffer[index1];
+						Sample out_2 = device->filter_out_buffer[index2];
 
-			int index1 = device->filter_index-1;
-			if (index1 < 0) index1 += array_size(device->filter_in_buffer);
-			int index2 = device->filter_index-2;
-			if (index2 < 0) index2 += array_size(device->filter_in_buffer);
-			Sample in_1 = device->filter_in_buffer[index1];
-			Sample in_2 = device->filter_in_buffer[index2];
-			Sample out_1 = device->filter_out_buffer[index1];
-			Sample out_2 = device->filter_out_buffer[index2];
+						Sample o = {
+							a1*in.left + a2*in_1.l + a3*in_2.l - b1*out_1.l - b2*out_2.l,
+							a1*in.right + a2*in_1.r + a3*in_2.r - b1*out_1.r - b2*out_2.r,
+						};
 
-			Sample o = {
-				a1*in[i].l + a2*in_1.l + a3*in_2.l - b1*out_1.l - b2*out_2.l,
-				a1*in[i].r + a2*in_1.r + a3*in_2.r - b1*out_1.r - b2*out_2.r,
-			};
+						device->filter_in_buffer[device->filter_index] = in;
+						device->filter_out_buffer[device->filter_index] = o;
+						if (++device->filter_index >= array_size(device->filter_in_buffer)) device->filter_index = 0;
 
-			device->filter_in_buffer[device->filter_index] = in[i];
-			device->filter_out_buffer[device->filter_index] = o;
-			if (++device->filter_index >= array_size(device->filter_in_buffer)) device->filter_index = 0;
+						out = o;
+			*/
 
-			out[i] = o;
+			device->low_filter.rez = device->params[LOWPASS_PARAM_REZ];
+			device->low_filter.low_freq = device->params[LOWPASS_PARAM_FREQ];
+			device->low_filter.high_freq = device->params[HIGHPASS_PARAM_FREQ];
+			device->low_filter.mode = Filter::LOW;
+
+			device->high_filter.rez = device->params[LOWPASS_PARAM_REZ];
+			device->high_filter.low_freq = device->params[LOWPASS_PARAM_FREQ];
+			device->high_filter.high_freq = device->params[HIGHPASS_PARAM_FREQ];
+			device->high_filter.mode = Filter::HIGH;
+
+			out = device->low_filter.process(in);
+			out = device->high_filter.process(out);
+
+			/*{
+				float r = 0.1f + device->params[LOWPASS_PARAM_REZ]*(sqrt(2.0f)-0.1f);
+				float f = powf(device->params[HIGHPASS_PARAM_FREQ], 2.0f) * (float)(sample_rate/4.0f);
+
+				float c = tanf(PI * f / (float)sample_rate);
+				float a1 = 1.0f / (1.0f + r*c + c*c);
+				float a2 = -2.0f*a1;
+				float a3 = a1;
+				float b1 = 2.0f * (c*c - 1.0f) * a1;
+				float b2 = (1.0f - r*c + c*c) * a1;
+
+				int index1 = device->filter_index-1;
+				if (index1 < 0) index1 += array_size(device->filter_in_buffer);
+				int index2 = device->filter_index-2;
+				if (index2 < 0) index2 += array_size(device->filter_in_buffer);
+				Sample in_1 = device->filter_in_buffer[index1];
+				Sample in_2 = device->filter_in_buffer[index2];
+				Sample out_1 = device->filter_out_buffer[index1];
+				Sample out_2 = device->filter_out_buffer[index2];
+
+				Sample o = {
+					a1*in[i].l + a2*in_1.l + a3*in_2.l - b1*out_1.l - b2*out_2.l,
+					a1*in[i].r + a2*in_1.r + a3*in_2.r - b1*out_1.r - b2*out_2.r,
+				};
+
+				device->filter_in_buffer[device->filter_index] = in[i];
+				device->filter_out_buffer[device->filter_index] = o;
+				if (++device->filter_index >= array_size(device->filter_in_buffer)) device->filter_index = 0;
+
+				out[i] += o;
+			}*/
 		}
+#if 0
 
 		if (device->type == DEVICE_TYPE_DELAY) {
 			int index = device->delay_index - (1 + (float)array_size(device->delay_line)*device->params[DELAY_PARAM_TIME]);
@@ -926,6 +1107,10 @@ void synth_go(SynthDevice *device, SampleOffset samples, Sample *in, Sample *out
 		++inright;
 		++left;
 		++right;*/
+#endif
+
+		outbuf[0][i] = out.left;
+		outbuf[1][i] = out.right;
 	}
 
 	/*if (device->type == DEVICE_TYPE_OSC) {
@@ -939,14 +1124,15 @@ void synth_go(SynthDevice *device, SampleOffset samples, Sample *in, Sample *out
 }
 
 // for testing
-int main() {
-	SynthDevice device = {};
-	device.params[OSC_PARAM_ATTACK] = 0.1f;
-	device.params[OSC_PARAM_RELEASE] = 0.1f;
-	device.type = DEVICE_TYPE_OSC;
-	synth_note_on(&device, &device.notes[60]);
-	Sample *out = (Sample*)calloc(10000, sizeof(Sample));
-	synth_go(&device, 10000, NULL, out);
-	synth_note_off(&device, &device.notes[60]);
-	synth_go(&device, 10000, NULL, out);
-}
+//int main() {
+//	SynthDevice device = {};
+//	device.params[OSC_PARAM_ATTACK] = 0.1f;
+//	device.params[OSC_PARAM_RELEASE] = 0.1f;
+//	device.type = DEVICE_TYPE_LOWPASS;
+//	synth_note_on(&device, &device.notes[60]);
+//	Sample *out = (Sample*)calloc(10000, sizeof(Sample));
+//	Sample *in = (Sample*)calloc(10000, sizeof(Sample));
+//	synth_go(&device, 10000, in, out);
+//	synth_note_off(&device, &device.notes[60]);
+//	synth_go(&device, 10000, in, out);
+//}

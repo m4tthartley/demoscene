@@ -233,7 +233,7 @@ struct SynthVstPlugin : public AudioEffectX {
 	}
 
 	void process(float **inputs, float **outputs, VstInt32 sample_frames) {
-		float *inleft = NULL;
+		/*float *inleft = NULL;
 		float *inright = NULL;
 		if (inputs) {
 			inleft = inputs[0];
@@ -243,37 +243,18 @@ struct SynthVstPlugin : public AudioEffectX {
 		Sample *out = (Sample*)malloc(sizeof(Sample)*sample_frames);
 		for (int i = 0; i < sample_frames; ++i) {
 			in[i] = {inleft[i], inright[i]};
-		}
-		synth_go(&devices[curProgram], sample_frames, in, out);
-		for (int i = 0; i < sample_frames; ++i) {
+		}*/
+		synth_go(&devices[curProgram], sample_frames, inputs, outputs);
+		/*for (int i = 0; i < sample_frames; ++i) {
 			outputs[0][i] = out[i].l;
 			outputs[1][i] = out[i].r;
 		}
 		free(in);
-		free(out);
+		free(out);*/
 	}
 
 	void processReplacing(float **inputs, float **outputs, VstInt32 sample_frames) {
-		float *inleft = NULL;
-		float *inright= NULL;
-		if (inputs) {
-			inleft = inputs[0];
-			inright = inputs[1];
-		}
-		Sample *in = (Sample*)malloc(sizeof(Sample)*sample_frames);
-		Sample *out = (Sample*)malloc(sizeof(Sample)*sample_frames);
-		if (inputs) {
-			for (int i = 0; i < sample_frames; ++i) {
-				in[i] = {inleft[i], inright[i]};
-			}
-		}
-		synth_go(&devices[curProgram], sample_frames, in, out);
-		for (int i = 0; i < sample_frames; ++i) {
-			outputs[0][i] = out[i].l;
-			outputs[1][i] = out[i].r;
-		}
-		free(in);
-		free(out);
+		synth_go(&devices[curProgram], sample_frames, inputs, outputs);
 	}
 
 };
