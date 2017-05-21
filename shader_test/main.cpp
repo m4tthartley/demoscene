@@ -4,6 +4,12 @@
 #include "w:/libs/gfx.c"
 #pragma comment(lib, "opengl32.lib")
 
+struct GfxRT {
+	GLuint fb;
+	GLuint tex[8];
+	int2 size;
+};
+
 int2 gfx_size = {1920, 1080};
 float2 gfx_quad_verts[] = {
 	-1.0, -1.0,
@@ -15,32 +21,97 @@ float2 gfx_quad_verts[] = {
 };
 int gfx_cur_shader = -1;
 int gfx_draw_call_tex_stack = 0;
+GfxRT gfx_cur_rt;
 
-struct GfxRT {
-	GLuint fb;
-	GLuint tex;
-	int2 size;
+enum GfxRTFormat {
+	GFX_RGB,
+	GFX_RGBA,
 };
-GfxRT gfx_rt(float size) {
+//#define gfx_rt(size, ...) ({\
+//	GfxRTFormat formats[] = {__VA_ARGS__};\
+//	_gfx_rt(size, formats, array_size(formats));\
+//})
+GfxRT gfx_rt(float size, char *formats) {
 	GfxRT rt;
 
-	rt.size = {(int)((float)gfx_size.w*size), (int)((float)gfx_size.h*size)};
-	//GLuint frame_texture;
-	glGenTextures(1, &rt.tex);
-	glBindTexture(GL_TEXTURE_2D, rt.tex);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, rt.size.w, rt.size.h, 0, GL_RGB, GL_UNSIGNED_BYTE, 0); // todo: RGBA
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-	//GLuint framebuffer;
 	glGenFramebuffers(1, &rt.fb);
 	glBindFramebuffer(GL_FRAMEBUFFER, rt.fb);
-	glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, rt.tex, 0);
-	GLenum draw_buffers[] = {GL_COLOR_ATTACHMENT0};
-	glDrawBuffers(1, draw_buffers);
-	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-		__debugbreak();
+	rt.size = {(int)((float)gfx_size.w*size), (int)((float)gfx_size.h*size)};
+
+	char fmt[64];
+	strcpy(fmt, formats);
+	int fmt_count = 0;
+	char *tok = strtok(fmt, ", ");
+	do {
+		debug_print("strtok %s\n", tok);
+
+		GLint tex_fmt = 0;
+		GLint other_fmt = 0;
+		if (tok) {
+			if (strcmp(tok, "RGB")==0) {
+				tex_fmt = GL_RGB;
+				other_fmt = GL_RGB;
+			}
+			if (strcmp(tok, "RGBA")==0) {
+				tex_fmt = GL_RGBA32F;
+				other_fmt = GL_RGBA;
+			}
+
+			if (tex_fmt) {
+				glGenTextures(1, &rt.tex[fmt_count]);
+				glBindTexture(GL_TEXTURE_2D, rt.tex[fmt_count]);
+				glTexImage2D(GL_TEXTURE_2D, 0, tex_fmt, rt.size.w, rt.size.h, 0, other_fmt, GL_FLOAT/*GL_UNSIGNED_BYTE*/, 0); // todo: RGBA
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+				glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + fmt_count, rt.tex[fmt_count], 0);
+
+				++fmt_count;
+			}
+		}
+	} while ((tok = strtok(NULL, ", ")) != NULL);
+
+	/*va_list va;
+	va_start(va, size);
+	GfxRTFormat format;
+	for (int i = 0; format = va_arg(va, GfxRTFormat); ++i) {
+		debug_print("format %i\n", i);
+	}
+	va_end(va);*/
+
+	if (!fmt_count) {
+		// the fuck?
+		debug_print("dude, you need at least _one_ valid color attachment (%s)\n", formats);
+		return {};
+	}
+	
+
+	GLenum draw_buffers[] = {
+		GL_COLOR_ATTACHMENT0,
+		GL_COLOR_ATTACHMENT1,
+		GL_COLOR_ATTACHMENT2,
+		GL_COLOR_ATTACHMENT3,
+		GL_COLOR_ATTACHMENT4,
+		GL_COLOR_ATTACHMENT5,
+		GL_COLOR_ATTACHMENT6,
+		GL_COLOR_ATTACHMENT7,
+	};
+	glDrawBuffers(fmt_count, draw_buffers);
+	GLenum fbstatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+	if (fbstatus != GL_FRAMEBUFFER_COMPLETE) {
+		if (fbstatus == GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT) {
+			__debugbreak();
+		}
+		if (fbstatus == GL_FRAMEBUFFER_INCOMPLETE_DIMENSIONS) {
+			__debugbreak();
+		}
+		if (fbstatus == GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT) {
+			__debugbreak();
+		}
+		if (fbstatus == GL_FRAMEBUFFER_UNSUPPORTED) {
+			__debugbreak();
+		}
 	}
 	glViewport(0, 0, rt.size.w, rt.size.h);
 
@@ -49,6 +120,7 @@ GfxRT gfx_rt(float size) {
 void gfx_rtb(GfxRT rt) {
 	glBindFramebuffer(GL_FRAMEBUFFER, rt.fb);
 	glViewport(0, 0, rt.size.w, rt.size.h);
+	gfx_cur_rt = rt;
 }
 
 void gfx_sh(int prog_index) {
@@ -58,6 +130,8 @@ void gfx_sh(int prog_index) {
 		gfx_cur_shader = prog_index;
 		glUseProgram(shader_progs[prog_index].prog);
 	} else {
+		glUseProgram(0);
+		gfx_cur_shader = -1;
 		debug_print("shader %i broken\n", prog_index);
 	}
 }
@@ -77,29 +151,37 @@ done:
 	gfx_sh(progi);
 }
 void gfx_uf(char *name, float value) {
-	int loc = glGetUniformLocation(shader_progs[gfx_cur_shader].prog, name); // todo: cache uniform names
-	glUniform1f(loc, value);
+	if (gfx_cur_shader != -1) {
+		int loc = glGetUniformLocation(shader_progs[gfx_cur_shader].prog, name); // todo: cache uniform names
+		glUniform1f(loc, value);
+	}
 }
 void gfx_uf2(char *name, float a, float b) {
-	int loc = glGetUniformLocation(shader_progs[gfx_cur_shader].prog, name); // todo: cache uniform names
-	glUniform2f(loc, a, b);
+	if (gfx_cur_shader != -1) {
+		int loc = glGetUniformLocation(shader_progs[gfx_cur_shader].prog, name); // todo: cache uniform names
+		glUniform2f(loc, a, b);
+	}
 }
-void gfx_rtut(char *name, GfxRT rt) {
-	glActiveTexture(GL_TEXTURE0 + gfx_draw_call_tex_stack);
-	glBindTexture(GL_TEXTURE_2D, rt.tex);
-	int u_tex = glGetUniformLocation(shader_progs[gfx_cur_shader].prog, name); // todo: cache
-	glUniform1i(u_tex, 0);
+void gfx_rtut(char *name, GfxRT rt, int index = 0) {
+	if (gfx_cur_shader != -1) {
+		glActiveTexture(GL_TEXTURE0 + gfx_draw_call_tex_stack);
+		glBindTexture(GL_TEXTURE_2D, rt.tex[index]);
+		int u_tex = glGetUniformLocation(shader_progs[gfx_cur_shader].prog, name); // todo: cache
+		glUniform1i(u_tex, 0);
 
-	++gfx_draw_call_tex_stack;
+		++gfx_draw_call_tex_stack;
+	}
 }
 
 void gfx_draw_call() {
 	gfx_draw_call_tex_stack = 0;
 }
 void gfx_quad() {
-	int u_pos = glGetAttribLocation(shader_progs[gfx_cur_shader].prog, "vertex_position"); // todo: cache attributes
-	glEnableVertexAttribArray(u_pos);
-	glVertexAttribPointer(u_pos, 2, GL_FLOAT, GL_FALSE, 0, gfx_quad_verts);
+	if (gfx_cur_shader != -1) {
+		int u_pos = glGetAttribLocation(shader_progs[gfx_cur_shader].prog, "vertex_position"); // todo: cache attributes
+		glEnableVertexAttribArray(u_pos);
+		glVertexAttribPointer(u_pos, 2, GL_FLOAT, GL_FALSE, 0, gfx_quad_verts);
+	}
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 	gfx_draw_call();
 }
@@ -135,9 +217,10 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 	}
 	glViewport(0, 0, rain.window_width, rain.window_height);*/
 
-	GfxRT main_rt = gfx_rt(1.0f);
-	GfxRT post_rt = gfx_rt(1.0f);
-	GfxRT test_rt = gfx_rt(1.0f);
+	GfxRT main_rt = gfx_rt(1.0f, "RGBA");
+	GfxRT post_rt = gfx_rt(1.0f, "RGB");
+	GfxRT test_rt = gfx_rt(1.0f, "RGB");
+	GfxRT dof1_rt = gfx_rt(1.0f, "RGB");
 
 	//GLuint frame_texture2;
 	//glGenTextures(1, &frame_texture2);
@@ -194,22 +277,41 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 
 
 		// first pass
+#if 0
 		gfx_rtb(main_rt);
 		gfx_sh("shader.vert", "shader.frag");
 		gfx_uf("time", rain.time_s);
 		gfx_quad();
+#elif 0
+		gfx_rtb(main_rt);
+		gfx_sh("shader.vert", "foggy_spheres.frag");
+		gfx_uf("time", rain.time_s);
+		gfx_quad();
+#else
+		gfx_rtb(main_rt);
+		gfx_sh("shader.vert", "cubes.frag");
+		gfx_uf("time", rain.time_s);
+		gfx_quad();
+#endif
 
 		// second pass
-		gfx_rtb(post_rt);
-		gfx_sh("shader.vert", "blur.frag");
-		gfx_rtut("rt_tex", main_rt);
-		gfx_uf2("resolution", rain.window_width, rain.window_height);
-		gfx_quad();
+		//gfx_rtb(post_rt);
+		//gfx_sh("shader.vert", "blur.frag");
+		//gfx_rtut("rt_tex", main_rt);
+		//gfx_uf2("resolution", rain.window_width, rain.window_height);
+		//gfx_quad();
 
 		// third pass
-		gfx_rtb(test_rt);
-		gfx_sh("shader.vert", "test.frag");
-		gfx_rtut("rt_tex", post_rt);
+		//gfx_rtb(test_rt);
+		//gfx_sh("shader.vert", "test.frag");
+		//gfx_rtut("rt_tex", post_rt);
+		//gfx_quad();
+
+		// dof pass
+		gfx_rtb(dof1_rt);
+		gfx_sh("shader.vert", "dof.frag");
+		gfx_rtut("rt_tex", main_rt);
+		gfx_uf2("screen_res", rain.window_width, rain.window_height);
 		gfx_quad();
 
 
@@ -225,20 +327,61 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 		glDrawArrays(GL_TRIANGLES, 0, 6);*/
 
 		// Blit to backbuffer
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-		glViewport(0, 0, rain.window_width, rain.window_height);
 		/*glBlitFramebuffer(0, 0, rain.window_width, rain.window_height,
 						  0, 0, rain.window_width, rain.window_height,
 						  GL_COLOR_BUFFER_BIT, GL_LINEAR);*/
 
+		glMatrixMode(GL_MODELVIEW);
+		glLoadIdentity();
+
+		glUseProgram(0);
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		glViewport(0, 0, rain.window_width, rain.window_height);
+
 		glEnable(GL_TEXTURE_2D);
-		glBindTexture(GL_TEXTURE_2D, test_rt.tex);
+		glBindTexture(GL_TEXTURE_2D, gfx_cur_rt.tex[0]);
 		glBegin(GL_QUADS);
 		glTexCoord2f(0.0f, 0.0f); glVertex2f(-1.0f, -1.0f);
 		glTexCoord2f(1.0f, 0.0f); glVertex2f(1.0f, -1.0f);
 		glTexCoord2f(1.0f, 1.0f); glVertex2f(1.0f, 1.0f);
 		glTexCoord2f(0.0f, 1.0f); glVertex2f(-1.0f, 1.0f);
 		glEnd();
+
+		/*glPushMatrix();
+		glTranslatef(0.0f, 1.0f, 0.0f);
+		glEnable(GL_TEXTURE_2D);
+		glBindTexture(GL_TEXTURE_2D, main_rt.tex);
+		glBegin(GL_QUADS);
+		glTexCoord2f(0.0f, 0.0f); glVertex2f(-1.0f, -1.0f);
+		glTexCoord2f(1.0f, 0.0f); glVertex2f(0.0f, -1.0f);
+		glTexCoord2f(1.0f, 1.0f); glVertex2f(0.0f, 0.0f);
+		glTexCoord2f(0.0f, 1.0f); glVertex2f(-1.0f, 0.0f);
+		glEnd();
+		glPopMatrix();
+
+		glPushMatrix();
+		glTranslatef(1.0f, 1.0f, 0.0f);
+		glEnable(GL_TEXTURE_2D);
+		glBindTexture(GL_TEXTURE_2D, post_rt.tex);
+		glBegin(GL_QUADS);
+		glTexCoord2f(0.0f, 0.0f); glVertex2f(-1.0f, -1.0f);
+		glTexCoord2f(1.0f, 0.0f); glVertex2f(0.0f, -1.0f);
+		glTexCoord2f(1.0f, 1.0f); glVertex2f(0.0f, 0.0f);
+		glTexCoord2f(0.0f, 1.0f); glVertex2f(-1.0f, 0.0f);
+		glEnd();
+		glPopMatrix();
+
+		glPushMatrix();
+		glTranslatef(0.0f, 0.0f, 0.0f);
+		glEnable(GL_TEXTURE_2D);
+		glBindTexture(GL_TEXTURE_2D, test_rt.tex);
+		glBegin(GL_QUADS);
+		glTexCoord2f(0.0f, 0.0f); glVertex2f(-1.0f, -1.0f);
+		glTexCoord2f(1.0f, 0.0f); glVertex2f(0.0f, -1.0f);
+		glTexCoord2f(1.0f, 1.0f); glVertex2f(0.0f, 0.0f);
+		glTexCoord2f(0.0f, 1.0f); glVertex2f(-1.0f, 0.0f);
+		glEnd();
+		glPopMatrix();*/
 	}
 
 	float a = 5.0;

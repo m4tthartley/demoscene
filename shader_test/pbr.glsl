@@ -1,4 +1,32 @@
 
+vec3 gamma(vec3 x) {
+	// x = x / (x + vec3(1.0));
+	return pow(x, vec3(1.0/2.2));
+}
+
+vec3 gamma_hdr(vec3 x) {
+	x = x / (x + vec3(1.0));
+	return pow(x, vec3(1.0/2.2));
+}
+
+void final_color(vec3 color) {
+	//frag = vec3(gamma(color));
+}
+
+void final_color_hdr(vec3 color) {
+	//frag = vec3(gamma_hdr(color));
+}
+
+struct Light {
+	vec3 pos;
+	vec3 color;
+};
+struct Lighting {
+	Light lights[16];
+	int num_lights;
+};
+Lighting lighting;
+
 vec3 brdf_fresnel_roughness(vec3 h, vec3 v, vec3 f0, float roughness) {
 	float costheta = max(dot(h, v), 0.0f);
 	return f0 + ((max(vec3(1.0f - roughness), f0) - f0) * pow(1.0 - costheta, 5.0f));
@@ -254,7 +282,7 @@ vec3 light_it(vec3 pos, vec3 normal, Camera camera, Material material, vec3 refl
 	for (int i = 0; i < /* num_lights */lighting.num_lights; ++i) {
 		vec3 light_dir = normalize(lighting.lights[i].pos - pos);
 		float light_dist = length(lighting.lights[i].pos - pos);
-		vec3 radiance = vec3(30.0) /* * lights[i].color */* vec3(20.0) * (1.0 / (light_dist*light_dist));
+		vec3 radiance = /* vec3(30.0) */ lighting.lights[i].color * vec3(20.0) * (1.0 / (light_dist*light_dist));
 
 		vec3 l = light_dir;
 		vec3 h = normalize(v + l);
