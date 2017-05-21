@@ -1,6 +1,6 @@
 #version 330
 
-uniform sampler2D frame;
+uniform sampler2D rt_tex;
 uniform vec2 resolution;
 in vec2 position;
 
@@ -16,19 +16,19 @@ void main() {
 	float samples = 41;
 	for (int y = int(-floor(samples/2)); y < int(ceil(samples/2)); ++y)
 	for (int x = int(-floor(samples/2)); x < int(ceil(samples/2)); ++x) {
-		color += texture(frame, (position*0.5+0.5)+vec2(pix.x*float(x), pix.y*float(y))).rgb;
+		color += texture(rt_tex, (position*0.5+0.5)+vec2(pix.x*float(x), pix.y*float(y))).rgb;
 	}
 	out_color = vec4(color/(samples*samples), 0.0);
-#elif 0 // weird radial blur
+#elif 1 // weird radial blur
 	float samples = 10;
 	for (int rot = 0; rot < samples; ++rot)
 	for (int stp = 0; stp < samples; ++stp) {
 		float r = float(rot)/samples * PI2;
 		vec2 a = vec2(sin(r), cos(r)) * (pix*3.0) * stp;
-		color += texture(frame, (position*0.5+0.5)+a).rgb;
+		color += texture(rt_tex, (position*0.5+0.5)+a).rgb;
 	}
 	out_color = vec4(color/(samples*samples), 1.0);
 #else
-	out_color = texture(frame, position*0.5+0.5);
+	out_color = texture(rt_tex, position*0.5+0.5);
 #endif
 }
