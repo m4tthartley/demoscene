@@ -221,6 +221,7 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 	GfxRT post_rt = gfx_rt(1.0f, "RGB");
 	GfxRT test_rt = gfx_rt(1.0f, "RGB");
 	GfxRT dof1_rt = gfx_rt(1.0f, "RGB");
+	GfxRT dof2_rt = gfx_rt(1.0f, "RGB");
 
 	//GLuint frame_texture2;
 	//glGenTextures(1, &frame_texture2);
@@ -311,6 +312,13 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 		gfx_rtb(dof1_rt);
 		gfx_sh("shader.vert", "dof.frag");
 		gfx_rtut("rt_tex", main_rt);
+		gfx_uf2("screen_res", rain.window_width, rain.window_height);
+		gfx_quad();
+
+		// dof pass 2
+		gfx_rtb(dof2_rt);
+		gfx_sh("shader.vert", "dof2.frag");
+		gfx_rtut("rt_tex", dof1_rt);
 		gfx_uf2("screen_res", rain.window_width, rain.window_height);
 		gfx_quad();
 
