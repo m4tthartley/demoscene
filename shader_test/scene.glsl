@@ -3,7 +3,16 @@ struct Material {
 	vec3 albedo;
 	float roughness;
 	float metallic;
+	vec3 emissive;
 };
+
+Material mat_mix(Material a, Material b, float m) {
+	// m = saturate(m);
+	return Material(mix(a.albedo, b.albedo, m),
+					mix(a.roughness, b.roughness, m),
+					mix(a.metallic, b.metallic, m),
+					mix(a.emissive, b.emissive, m));
+}
 
 struct Camera {
 	vec3 pos;

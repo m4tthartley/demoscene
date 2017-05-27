@@ -220,8 +220,10 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 	GfxRT main_rt = gfx_rt(1.0f, "RGBA");
 	GfxRT post_rt = gfx_rt(1.0f, "RGB");
 	GfxRT test_rt = gfx_rt(1.0f, "RGB");
-	GfxRT dof1_rt = gfx_rt(1.0f, "RGB");
-	GfxRT dof2_rt = gfx_rt(1.0f, "RGB");
+
+	GfxRT dof_fields_rt = gfx_rt(1.0f, "RGBA, RGBA");
+	GfxRT dof1_rt = gfx_rt(1.0f, "RGBA, RGBA");
+	GfxRT dof2_rt = gfx_rt(1.0f, "RGBA, RGBA");
 
 	//GLuint frame_texture2;
 	//glGenTextures(1, &frame_texture2);
@@ -308,10 +310,18 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 		//gfx_rtut("rt_tex", post_rt);
 		//gfx_quad();
 
+		// dof separate pass
+		gfx_rtb(dof_fields_rt);
+		gfx_sh("shader.vert", "dof_separate.frag");
+		gfx_rtut("rt_tex", main_rt);
+		gfx_uf2("screen_res", rain.window_width, rain.window_height);
+		gfx_quad();
+
 		// dof pass
 		gfx_rtb(dof1_rt);
 		gfx_sh("shader.vert", "dof.frag");
-		gfx_rtut("rt_tex", main_rt);
+		gfx_rtut("rt_tex", dof_fields_rt, 0);
+		gfx_rtut("rt_tex2", dof_fields_rt, 1);
 		gfx_uf2("screen_res", rain.window_width, rain.window_height);
 		gfx_quad();
 

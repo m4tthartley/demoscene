@@ -3,10 +3,9 @@
 uniform sampler2D rt_tex;
 uniform vec2 screen_res;
 in vec2 screen_pos;
-out vec4 frag;
+out vec3 frag;
 
 #include "math.glsl"
-#include "camera.glsl"
 
 vec2 square_to_disk(vec2 sq) {
 	float a = sq.x;//2*sq.x-1.0;
@@ -39,28 +38,30 @@ vec2 square_to_disk(vec2 sq) {
 }
 
 void main() {
+
 	float focus = 30.0;
 	float depth = texture(rt_tex, screen_pos*0.5+0.5).a;
 
 	vec2 pix = vec2(1.0) / screen_res;
 	vec3 color = vec3(0.0);
-	float disc = get_coc(depth) /* * 10.0 */;
-	// disc = pow(abs(depth - focus), 0.8);
-	int samples = 64;
-	int actual_samples = 0;
-	for (int y = 0; y < 8; ++y) {
-		for (int x = 0; x < 8; ++x) {
-			vec2 d = square_to_disk(vec2(-1.0+(x*(1.0/3.5)), -1.0+(y*(1.0/3.5))));
-			vec2 coord = (screen_pos*0.5+0.5) + (d*(pix/2.0)*disc);
-			vec4 samp = texture(rt_tex, coord);
-			/* if (samp.a >= depth-1.0) */ {
-				color += texture(rt_tex, coord).rgb;
-				++actual_samples;
-			}
+	float disc = 1.0;
+	disc = pow(abs(depth - focus), 0.8);
+	// int samples = /* 64 */ 7*7;
+	// vec3 brightest = vec3(0.0);
+	// for (int i = 0; i < samples; ++i) {
+	// 	vec2 pos = vec2(-3.0+(i%7), -3.0+(i/7));
+	// 	brightest = max(brightest, texture(rt_tex, (screen_pos*0.5+0.5) + (square_to_disk(pos)*(pix/2.0)*disc)).rgb);
+	// }
+	vec3 brightest = vec3(0.0);
+	int samples = 8;
+	for (int y = 0; y < samples; ++y) {
+		for (int x = 0; x < samples; ++x) {
+			vec2 d = square_to_disk(vec2(-1.0+(x/((samples-1)*0.5)), -1.0+(y/((samples-1)*0.5))));
+			brightest = max(brightest, texture(rt_tex, (screen_pos*0.5+0.5) + (d*(pix/2.0)*disc)).rgb);
 		}
 	}
-	frag = vec4(color/float(actual_samples), depth);
+	frag = brightest;
 
-	// frag = vec4(texture(rt_tex, screen_pos*0.5+0.5).rgb, 0.0);
+	frag = texture(rt_tex, screen_pos*0.5+0.5).rgb;
 	// frag = vec3(texture(rt_tex, screen_pos*0.5+0.5).a, 0.0, 0.0)/100.0;
 }

@@ -278,7 +278,7 @@ vec3 light_it(vec3 pos, vec3 normal, Camera camera, Material material, vec3 refl
 	vec3 n = normalize(normal);
 	float ndotv = max(dot(n, v), 0.0);
 
-	vec3 Lo = vec3(0.0);
+	vec3 Lo = material.emissive/* vec3(0.0) */;
 	for (int i = 0; i < /* num_lights */lighting.num_lights; ++i) {
 		vec3 light_dir = normalize(lighting.lights[i].pos - pos);
 		float light_dist = length(lighting.lights[i].pos - pos);

@@ -67,7 +67,7 @@ SceneResult ray_march(Camera camera, vec3 ray) {
 		return SceneResult(candidate_t, sr.pos, sr.mat);
 		//return sr;
 	} else {
-		return SceneResult(t_max, vec3(0.0), Material(vec3(0.0), 0.0, 0.0));
+		return SceneResult(t_max, vec3(0.0), Material(vec3(0.0), 0.0, 0.0, vec3(0.0)));
 	}		
 }
 #endif
