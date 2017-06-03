@@ -1,17 +1,12 @@
 
-#include "w:/demoscene/synth/synth.cpp"
-
-#define VST_TYPE DEVICE_TYPE_NOISE
-#define VST_NAME "Synth Noise"
-#define VST_TITLE "Matt's Noise"
-#define VST_EFFECT
-const int num_params = NOISE_PARAM_MAX;
-const float *param_defaults = noise_param_defaults;
-struct ParamInfo {
-	char *name;
-};
-ParamInfo param_info[] = {
-	{"Volume"},
+#define STRUCT_NAME Noise
+char *param_names[] = {
+	"Volume",
 };
 
 #include "../vstlib.cpp"
+
+void init(SynthVstPlugin *vst) {
+	vst->title = "NOISE";
+	vst->options.volume = 0.1f;
+}

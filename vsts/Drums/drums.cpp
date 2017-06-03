@@ -1,35 +1,32 @@
 
-#include "w:/demoscene/synth/synth.cpp"
-
 #define STRUCT_NAME Drums
-
+#define INSTRUMENT
 char *param_names[] = {
-	{"WAVE"},
-	{"PITCH"},
-	{"PITCH_FALLOFF"},
+	"WAVE",
+	"PITCH",
+	"PITCH_FALLOFF",
 
-	{"ATTACK"},
-	{"ATTACK_START"},
-	{"RELEASE"},
-	{"NOISE"},
+	"ATTACK",
+	"ATTACK_START",
+	"RELEASE",
+	"NOISE",
 
-	{"PITCH ATTACK"},
-	{"PITCH RELEASE"},
+	"PITCH ATTACK",
+	"PITCH RELEASE",
 
-	{"NOISE ATTACK"},
-	{"NOISE RELEASE"},
+	"NOISE ATTACK",
+	"NOISE RELEASE",
 
-	{"TRIANGLE WAVE"},
+	"TRIANGLE WAVE",
 
-	{"ENVELOPE POW"},
-	{"PITCH ENVELOPE POW"},
+	"ENVELOPE POW",
+	"PITCH ENVELOPE POW",
 };
 
 #include "../vstlib.cpp"
 
 void init(SynthVstPlugin *vst) {
 	vst->title = "BEATS";
-	vst->instrument = true;
 
 	vst->options.sine_wave = 0.5f;
 	vst->options.pitch = 0.5f;

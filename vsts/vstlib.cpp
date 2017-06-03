@@ -8,6 +8,8 @@
 #include "../vstsdk/audioeffectx.h"
 #include "w:/libs/math.c"
 
+#include "w:/demoscene/synth/synth.cpp"
+
 //#define DEBUG_PRINT
 
 const int num_outputs = 2;
@@ -33,6 +35,9 @@ struct SynthVstPlugin : public AudioEffectX {
 		AudioEffectX(audioMaster, array_size(devices), array_size(param_names)) {
 
 		init(this);
+#ifdef INSTRUMENT
+		instrument = true;
+#endif
 
 		memset(devices, 0, sizeof(STRUCT_NAME)*100);
 		for (int i = 0; i < array_size(devices); ++i) {
@@ -122,25 +127,27 @@ struct SynthVstPlugin : public AudioEffectX {
 	VstInt32 getNumMidiOutputChannels() { return 0; }
 
 	VstInt32 processEvents(VstEvents* events) {
-		for (int i = 0; i < events->numEvents; ++i) {
-			if (events->events[i]->type == kVstMidiType) {
+#ifdef INSTRUMENT
+			for (int i = 0; i < events->numEvents; ++i) {
+				if (events->events[i]->type == kVstMidiType) {
 
-				VstMidiEvent *e = (VstMidiEvent*)events->events[i];
-				int status = e->midiData[0] & 0xf0;
+					VstMidiEvent *e = (VstMidiEvent*)events->events[i];
+					int status = e->midiData[0] & 0xf0;
 
-				VstInt32 note = e->midiData[1] & 0x7f;
-				VstInt32 velocity = e->midiData[2] & 0x7f;
-				// debug_print("status 0x%x, velocity %i \n", status, velocity);
+					VstInt32 note = e->midiData[1] & 0x7f;
+					VstInt32 velocity = e->midiData[2] & 0x7f;
+					// debug_print("status 0x%x, velocity %i \n", status, velocity);
 
-				if (status == 0x90 || status == 0x80) {
-					if (status == 0x90 && velocity != 0) {
-						devices[curProgram].notes[note].on();
-					} else {
-						devices[curProgram].notes[note].off();
+					if (status == 0x90 || status == 0x80) {
+						if (status == 0x90 && velocity != 0) {
+							devices[curProgram].notes[note].on();
+						} else {
+							devices[curProgram].notes[note].off();
+						}
 					}
 				}
 			}
-		}
+#endif
 		return 1;
 	}
 

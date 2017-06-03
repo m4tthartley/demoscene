@@ -1,24 +1,26 @@
 
-#include "w:/demoscene/synth/synth.cpp"
-
-#define VST_TYPE DEVICE_TYPE_OSC
-#define VST_NAME "Synth Osc"
-#define VST_TITLE "Matt's Osc"
-#define VST_INSTRUMENT
-const int num_params = OSC_PARAM_MAX;
-const float *param_defaults = osc_param_defaults;
-struct ParamInfo {
-	char *name;
-};
-ParamInfo param_info[] = {
-	{"SINE"},
-	{"SAWTOOTH"},
-	{"TRIANGLE"},
-	{"SQUARE"},
-
-	{"ATTACK"},
-	{"HOLD"},
-	{"RELEASE"},
+#define STRUCT_NAME Osc
+#define INSTRUMENT
+char *param_names[] = {
+	"SINE",
+	"SAWTOOTH",
+	"TRIANGLE",
+	"SQUARE",
+	"ATTACK",
+	"HOLD",
+	"RELEASE",
 };
 
 #include "../vstlib.cpp"
+
+void init(SynthVstPlugin *vst) {
+	vst->title = "OSCAR";
+
+	vst->options.sine = 0.5f;
+	vst->options.saw = 0.0f;
+	vst->options.tri = 0.0f;
+	vst->options.square = 0.0f;
+	vst->options.attack = 0.5f;
+	vst->options.hold = 0.5f;
+	vst->options.release = 0.5f;
+}
