@@ -8,72 +8,64 @@
 #include "../vstsdk/audioeffectx.h"
 #include "w:/libs/math.c"
 
-// #ifndef VST_EFFECT
-// #	define VST_INSTRUMENT
-// #endif
-
 //#define DEBUG_PRINT
 
 const int num_outputs = 2;
-const int num_devices = 100;
+
+#define __OPTIONS_STRUCT_NAME(a) a##Options
+#define _OPTIONS_STRUCT_NAME(a) __OPTIONS_STRUCT_NAME(a)
+#define OPTIONS_STRUCT_NAME _OPTIONS_STRUCT_NAME(STRUCT_NAME)
+
+struct SynthVstPlugin;
+void init(SynthVstPlugin *vst);
 
 struct SynthVstPlugin : public AudioEffectX {
 
-	/*DeviceTypes device_id;
-	char *name;
 	char *title;
-	int num_params;
-	ParamInfo *param_names;
-	float *param_defaults;
-	bool is_instrument;*/
+	STRUCT_NAME devices[100];
+	OPTIONS_STRUCT_NAME options;
+	bool instrument = false;
 
-	SynthDevice devices[num_devices];
 	FILE *debug_file;
 	char progname[64];
 
 	SynthVstPlugin(audioMasterCallback audioMaster) :
-		AudioEffectX(audioMaster, num_devices, num_params) {
+		AudioEffectX(audioMaster, array_size(devices), array_size(param_names)) {
 
-		strcpy(progname, VST_NAME);
+		init(this);
 
-		// todo: slow?
-		for (int i = 0; i < num_devices; ++i) {
-			devices[i] = {};
-			for (int j = 0; j < num_params; ++j) {
-				devices[i].params[j] = param_defaults[j];
-				devices[i].type = VST_TYPE;
-			}
+		memset(devices, 0, sizeof(STRUCT_NAME)*100);
+		for (int i = 0; i < array_size(devices); ++i) {
+			devices[i].options = options;
 		}
 
-#ifdef DEBUG_PRINT
-		debug_file = fopen("w:/demoscene/vsts/" VST_NAME " debug.txt", "w");
-#endif
+		strcpy(progname, title);
 
-		/*setProgram(0);
-		curProgram = 0;*/
+#ifdef DEBUG_PRINT
+		char file_name[64] = "w:/demoscene/vsts/";
+		strcat(file_name, title);
+		strcat(file_name, " debug.txt");
+		debug_file = fopen(file_name/*"w:/demoscene/vsts/" VST_NAME " debug.txt"*/, "w");
+#endif
 
 		if (audioMaster) {
-			//setNumInputs(0);
-
-#ifdef VST_INSTRUMENT
+			if (instrument) {
 				setNumInputs(0);
-#endif
-#ifdef VST_EFFECT
+			} else {
 				setNumInputs(2);
-#endif
+			}
 
 			setNumOutputs(num_outputs);
 			canProcessReplacing();
 
-#ifdef VST_INSTRUMENT
+			if (instrument) {
 				isSynth();
-#endif
+			}
 
 			setUniqueID('Mt53');
 		}
 
 		suspend();
-
 		synth_init();
 	}
 
@@ -105,156 +97,60 @@ struct SynthVstPlugin : public AudioEffectX {
 		return -1;
 	}
 
-	bool getEffectName(char* name) { strncpy(name, VST_TITLE, kVstMaxEffectNameLen); return true; }
-	bool getVendorString(char* text) { strncpy(text, "GiantJelly", kVstMaxVendorStrLen); return true; }
-	bool getProductString(char* text) { strncpy(text, VST_TITLE, kVstMaxProductStrLen); return true; }
+	bool getEffectName(char* name) { strncpy(name, title, kVstMaxEffectNameLen); return true; }
+	bool getVendorString(char* text) { strncpy(text, "GIANTJELLY", kVstMaxVendorStrLen); return true; }
+	bool getProductString(char* text) { strncpy(text, title, kVstMaxProductStrLen); return true; }
 
 	void getParameterName(VstInt32 index, char* label) {
-		//strcpy(label, "Matt's knob");
-		strcpy(label, param_info[index].name);
+		strcpy(label, param_names[index]);
 	}
 
 	float getParameter(VstInt32 index) {
-		return devices[curProgram].params[index];
+		return ((float*)&devices[curProgram].options)[index];
 	}
 
 	void setParameter(VstInt32 index, float value) {
-		devices[curProgram].params[index] = value;
+		((float*)&devices[curProgram].options)[index] = value;
 	}
 
 	void getParameterDisplay(VstInt32 index, char *text) {
-		sprintf(text, "%.2f", devices[curProgram].params[index]);
+		sprintf(text, "%.2f", ((float*)&devices[curProgram].options)[index]);
 	}
 
-	void getParameterLabel(VstInt32 index, char *label) {
-		//strcpy(label, params[index].name);
-	}
-
-	VstInt32 getNumMidiInputChannels() {
-		return 1;
-	}
-	VstInt32 getNumMidiOutputChannels() {
-		return 0;
-	}
+	void getParameterLabel(VstInt32 index, char *label) {}
+	VstInt32 getNumMidiInputChannels() { return 1; }
+	VstInt32 getNumMidiOutputChannels() { return 0; }
 
 	VstInt32 processEvents(VstEvents* events) {
-		/*char str[64];
-		sprintf(str, "Event %i: \n", events->numEvents);
-		fwrite(str, strlen(str), 1, debug_file);*/
-		/*if (events->numEvents > 0) {
-		if (events->events[0]->type == kVstMidiType) {
-		VstMidiEvent *e = (VstMidiEvent*)events->events[0];
-		play_note = true;
-		}
-		if (events->events[0]->type == kVstSysExType) {
-		VstMidiEvent *e = (VstMidiEvent*)events->events[0];
-		play_note = true;
-		}
-		}*/
-
 		for (int i = 0; i < events->numEvents; ++i) {
 			if (events->events[i]->type == kVstMidiType) {
 
 				VstMidiEvent *e = (VstMidiEvent*)events->events[i];
 				int status = e->midiData[0] & 0xf0;
 
-				/**/
-
 				VstInt32 note = e->midiData[1] & 0x7f;
 				VstInt32 velocity = e->midiData[2] & 0x7f;
-				debug_print("status 0x%x, velocity %i \n", status, velocity);
-
-				/*
-				ableton midi data
-				status 0x90, velocity 100
-				status 0x80, velocity 64
-				status 0x90, velocity 100
-				status 0x80, velocity 64
-				status 0x90, velocity 100
-				status 0x80, velocity 64
-				*/
-				/*
-				fl midi data
-				status 0x80, velocity 64
-				status 0x90, velocity 100
-				status 0x80, velocity 64
-				status 0x90, velocity 100
-				status 0x80, velocity 64
-
-				fl does 0x80 first
-				*/
+				// debug_print("status 0x%x, velocity %i \n", status, velocity);
 
 				if (status == 0x90 || status == 0x80) {
 					if (status == 0x90 && velocity != 0) {
-						synth_note_on(&devices[curProgram], &devices[curProgram].notes[note]);
-						debug_print("note %i\n", note);
+						devices[curProgram].notes[note].on();
 					} else {
-						synth_note_off(&devices[curProgram], &devices[curProgram].notes[note]);
+						devices[curProgram].notes[note].off();
 					}
 				}
-
-				/*if (status == 0x90) {
-				play_note = true;
-				}
-				if (status == 0x80) {
-				play_note = false;
-				}*/
-
-				/*if (status == 0x90 || status == 0x80) {
-				VstInt32 note = e->midiData[1] & 0x7f;
-				VstInt32 velocity = e->midiData[2] & 0x7f;
-				if (status == 0x80) {
-				char *str = "MIDI EVENT 0x80\n"; fwrite(str, strlen(str), 1, debug_file);
-				velocity = 0;
-				}
-				if (!velocity && (note == current_note)) {
-				char *str = "MIDI EVENT !velocity && (note == current_note)\n"; fwrite(str, strlen(str), 1, debug_file);
-				play_note = false;
-				} else {
-				current_note = note;
-				play_note = true;
-				char *str = "MIDI EVENT play_note\n"; fwrite(str, strlen(str), 1, debug_file);
-				}
-				} else if (status == 0xb0) {
-				if (e->midiData[1] == 0x7e || e->midiData[1] == 0x7b) {
-				play_note = false;
-				char *str = "MIDI EVENT all notes off\n"; fwrite(str, strlen(str), 1, debug_file);
-				}
-				}*/
-
-				/*char str[64];
-				sprintf(str, "MIDI EVENT: status %i \n", status);
-				fwrite(str, strlen(str), 1, debug_file);*/
-				/*char *str = "MIDI EVENT\n";
-				fwrite(str, strlen(str), 1, debug_file);*/
 			}
 		}
 		return 1;
 	}
 
-	void process(float **inputs, float **outputs, VstInt32 sample_frames) {
-		/*float *inleft = NULL;
-		float *inright = NULL;
-		if (inputs) {
-			inleft = inputs[0];
-			inright = inputs[1];
-		}
-		Sample *in = (Sample*)malloc(sizeof(Sample)*sample_frames);
-		Sample *out = (Sample*)malloc(sizeof(Sample)*sample_frames);
-		for (int i = 0; i < sample_frames; ++i) {
-			in[i] = {inleft[i], inright[i]};
-		}*/
-		synth_go(&devices[curProgram], sample_frames, inputs, outputs);
-		/*for (int i = 0; i < sample_frames; ++i) {
-			outputs[0][i] = out[i].l;
-			outputs[1][i] = out[i].r;
-		}
-		free(in);
-		free(out);*/
+	virtual void process(float **inputs, float **outputs, int samples) {
+		devices[curProgram].process(inputs, outputs, samples);
 	}
 
 	void processReplacing(float **inputs, float **outputs, VstInt32 sample_frames) {
-		synth_go(&devices[curProgram], sample_frames, inputs, outputs);
+		//synth_go(&devices[curProgram], sample_frames, inputs, outputs);
+		process(inputs, outputs, sample_frames);
 	}
 
 };
