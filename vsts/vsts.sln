@@ -9,7 +9,7 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Delay", "Delay\Delay.vcxpro
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Feedloop", "Feedloop\Feedloop.vcxproj", "{51AE61DC-83FB-419C-AC87-87A962CFC904}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Lowpass", "Lowpass\Lowpass.vcxproj", "{1AF11DD7-5E5C-48D2-8736-DE50B4CB97B0}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Filter", "Filter\Filter.vcxproj", "{1AF11DD7-5E5C-48D2-8736-DE50B4CB97B0}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Noise", "Noise\Noise.vcxproj", "{6B04D0AE-312D-49E7-AA45-C82CF26E46EA}"
 EndProject

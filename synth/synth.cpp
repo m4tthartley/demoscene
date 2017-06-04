@@ -1032,6 +1032,9 @@ struct Filter {
 	}*/
 
 	void process(float **inbuf, float **outbuf, SampleOffset samples) {
+		in_delay.init(3);
+		out_delay.init(3);
+
 		for (int i = 0; i < samples; ++i) {
 			Sample out = {};
 			Sample in = {inbuf[0][i], inbuf[1][i]};
