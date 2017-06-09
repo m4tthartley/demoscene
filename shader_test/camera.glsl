@@ -13,3 +13,8 @@ float get_coc(float depth) {
 	float coc = aperture * ((focal_length*(focus-depth)) / (depth*(focus-focal_length)));
 	return min(abs(coc), 30.0);
 }
+
+float get_coc_signed(float depth) {
+	float coc = aperture * ((focal_length*(focus-depth)) / (depth*(focus-focal_length)));
+	return coc;
+}

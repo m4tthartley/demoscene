@@ -31,24 +31,22 @@ struct OscOptions {
 };
 struct DrumsOptions {
 	float sine_wave;
-	float pitch;
-	float pitch_falloff;
+	float tri_wave;
 
 	float attack;
-	float attack_start;
 	float release;
-	float noise;
+	float env_pow;
 
+	float pitch;
+	float pitch_bend;
 	float pitch_attack;
 	float pitch_release;
-
+	float pitch_env_pow;
+	
+	float noise;
 	float noise_attack;
 	float noise_release;
-
-	float tri;
-
-	float env_pow;
-	float pitch_env_pow;
+	float noise_env_pow;
 };
 struct NoiseOptions {
 	float volume;
@@ -62,6 +60,17 @@ struct FilterOptions {
 	float rez;
 	float low_freq;
 	float high_freq;
+};
+struct SineFeedbackOptions {
+	float attack;
+	float release;
+	float feedback1;
+	float feedback2;
+	float feedback3;
+};
+struct DelayOptions {
+	float feedback;
+	float time;
 };
 #pragma pack(pop)
 
@@ -117,18 +126,18 @@ struct FilterOptions {
 //	0.14f,
 //	0.7f,*/
 //};
-enum FeedloopParams {
-	FEEDLOOP_PARAM_FEEDBACK1,
-	FEEDLOOP_PARAM_FEEDBACK2,
-	FEEDLOOP_PARAM_FEEDBACK3,
-
-	FEEDLOOP_PARAM_MAX,
-};
-float feedloop_param_defaults[] = {
-	0.5f,
-	0.5f,
-	0.5f,
-};
+//enum FeedloopParams {
+//	FEEDLOOP_PARAM_FEEDBACK1,
+//	FEEDLOOP_PARAM_FEEDBACK2,
+//	FEEDLOOP_PARAM_FEEDBACK3,
+//
+//	FEEDLOOP_PARAM_MAX,
+//};
+//float feedloop_param_defaults[] = {
+//	0.5f,
+//	0.5f,
+//	0.5f,
+//};
 //enum LowpassParams {
 //	LOWPASS_PARAM_REZ,
 //	LOWPASS_PARAM_FREQ,
@@ -141,16 +150,16 @@ float feedloop_param_defaults[] = {
 //	0.5f,
 //	0.0f,
 //};
-enum DelayParams {
-	DELAY_PARAM_FEEDBACK,
-	DELAY_PARAM_TIME,
-
-	DELAY_PARAM_MAX,
-};
-float delay_param_defaults[] = {
-	0.5f,
-	0.5f,
-};
+//enum DelayParams {
+//	DELAY_PARAM_FEEDBACK,
+//	DELAY_PARAM_TIME,
+//
+//	DELAY_PARAM_MAX,
+//};
+//float delay_param_defaults[] = {
+//	0.5f,
+//	0.5f,
+//};
 //enum DrumParams {
 //	DRUM_PARAM_WAVE,
 //	DRUM_PARAM_PITCH,
@@ -401,10 +410,16 @@ struct DelayLineMono {
 	float *buf;
 	int pos;
 	int size;
+	int wrap;
+
+	void set_wrap(float f) {
+		wrap = (float)size * f;
+	}
 
 	void init(int s) {
 		if (!buf) {
 			size = s;
+			wrap = s;
 			buf = (float*)calloc(size, sizeof(float));
 			pos = 0;
 		}
@@ -430,6 +445,11 @@ struct DelayLine {
 		};
 	};
 
+	void set_wrap(float f) {
+		left.set_wrap(f);
+		right.set_wrap(f);
+	}
+
 	void init(int lsize, int rsize) {
 		l.init(lsize);
 		r.init(rsize);
@@ -451,8 +471,8 @@ struct DelayLine {
 	void store(Sample s) {
 		left.buf[left.pos] = s.left;
 		right.buf[right.pos] = s.right;
-		if (++left.pos == left.size) left.pos = 0;
-		if (++right.pos == right.size) right.pos = 0;
+		if (++left.pos >= left.wrap) left.pos = 0;
+		if (++right.pos >= right.wrap) right.pos = 0;
 	}
 };
 
@@ -550,18 +570,18 @@ void synth_init() {
 
 }
 
-struct Comb {
-	float *buffer;
-	int size;
-	int index;
-	float filter;
-};
-
-struct Allpass {
-	float *buffer;
-	int size;
-	int index;
-};
+//struct Comb {
+//	float *buffer;
+//	int size;
+//	int index;
+//	float filter;
+//};
+//
+//struct Allpass {
+//	float *buffer;
+//	int size;
+//	int index;
+//};
 
 //float offsetroom = 0.7f;
 //float initialroom = 0.14f;
@@ -571,55 +591,55 @@ struct Allpass {
 //float dry = 0.0f;
 //float allpass_feedback = 0.5f;
 
-Comb init_comb(int size) {
-	Comb result = {};
-	result.buffer = (float*)calloc(size, sizeof(float));
-	result.size = size;
-	return result;
-}
-
-Allpass init_allpass(int size) {
-	Allpass result = {};
-	result.buffer = (float*)calloc(size, sizeof(float));
-	result.size = size;
-	return result;
-}
-
-Comb comb1_l = init_comb(1116);
-Comb comb1_r = init_comb(1116 + 23);
-
-Comb comb2_l = init_comb(1188);
-Comb comb2_r = init_comb(1188 + 23);
-
-Comb comb3_l = init_comb(1277);
-Comb comb3_r = init_comb(1277 + 23);
-
-Comb comb4_l = init_comb(1356);
-Comb comb4_r = init_comb(1356 + 23);
-
-Comb comb5_l = init_comb(1422);
-Comb comb5_r = init_comb(1422 + 23);
-
-Comb comb6_l = init_comb(1491);
-Comb comb6_r = init_comb(1491 + 23);
-
-Comb comb7_l = init_comb(1557);
-Comb comb7_r = init_comb(1557 + 23);
-
-Comb comb8_l = init_comb(1617);
-Comb comb8_r = init_comb(1617 + 23);
-
-Allpass allpass1_l = init_allpass(556);
-Allpass allpass1_r = init_allpass(556 + 23);
-
-Allpass allpass2_l = init_allpass(441);
-Allpass allpass2_r = init_allpass(441 + 23);
-
-Allpass allpass3_l = init_allpass(341);
-Allpass allpass3_r = init_allpass(341 + 23);
-
-Allpass allpass4_l = init_allpass(225);
-Allpass allpass4_r = init_allpass(225 + 23);
+//Comb init_comb(int size) {
+//	Comb result = {};
+//	result.buffer = (float*)calloc(size, sizeof(float));
+//	result.size = size;
+//	return result;
+//}
+//
+//Allpass init_allpass(int size) {
+//	Allpass result = {};
+//	result.buffer = (float*)calloc(size, sizeof(float));
+//	result.size = size;
+//	return result;
+//}
+//
+//Comb comb1_l = init_comb(1116);
+//Comb comb1_r = init_comb(1116 + 23);
+//
+//Comb comb2_l = init_comb(1188);
+//Comb comb2_r = init_comb(1188 + 23);
+//
+//Comb comb3_l = init_comb(1277);
+//Comb comb3_r = init_comb(1277 + 23);
+//
+//Comb comb4_l = init_comb(1356);
+//Comb comb4_r = init_comb(1356 + 23);
+//
+//Comb comb5_l = init_comb(1422);
+//Comb comb5_r = init_comb(1422 + 23);
+//
+//Comb comb6_l = init_comb(1491);
+//Comb comb6_r = init_comb(1491 + 23);
+//
+//Comb comb7_l = init_comb(1557);
+//Comb comb7_r = init_comb(1557 + 23);
+//
+//Comb comb8_l = init_comb(1617);
+//Comb comb8_r = init_comb(1617 + 23);
+//
+//Allpass allpass1_l = init_allpass(556);
+//Allpass allpass1_r = init_allpass(556 + 23);
+//
+//Allpass allpass2_l = init_allpass(441);
+//Allpass allpass2_r = init_allpass(441 + 23);
+//
+//Allpass allpass3_l = init_allpass(341);
+//Allpass allpass3_r = init_allpass(341 + 23);
+//
+//Allpass allpass4_l = init_allpass(225);
+//Allpass allpass4_r = init_allpass(225 + 23);
 
 //Comb comb1_l = {(float*)malloc(sizeof(float) * (1116)), (1116)};
 //Comb comb1_r = {(float*)malloc(sizeof(float) * (1116 + 23)), (1116 + 23)};
@@ -775,11 +795,13 @@ struct Drums {
 				float env_vol = note->env.update(false);
 				if (env_vol > 0.001f) env_vol = powf(env_vol, (options.env_pow*2.0f));
 				float env_pitch = note->env2.update(false);
+				if (env_pitch > 0.001f) env_pitch = powf(env_pitch, (options.pitch_env_pow*2.0f));
 				float env_noise = note->env3.update(false);
+				if (env_noise > 0.001f) env_noise = powf(env_noise, (options.noise_env_pow*2.0f));
 
 				//float p = (env_vol*64.0f*device->params[DRUM_PARAM_PITCH_FALLOFF]) + (device->params[DRUM_PARAM_PITCH]-0.5f)*64.0f;
-				float p = (64.0f*options.pitch_falloff*env_pitch) + (options.pitch-0.5f)*64.0f;
-				float hz = 261.6255653006f *powf(2.0f, (((float)j + p)-48.0f)/12.0f);
+				float p = (64.0f*options.pitch_bend*env_pitch) + (options.pitch-0.5f)*64.0f;
+				float hz = 261.6255653006f *powf(2.0f, (((float)j + p)-48.0f-24.0f)/12.0f);
 
 				note->sine += (hz / (float)sample_rate) * PI2;
 				if (note->sine > PI2) note->sine -= PI2;
@@ -791,7 +813,7 @@ struct Drums {
 				if (t > 1.0f) t = 1.0f-(t-1.0f);
 
 				// * (device->params[BEATIT_PARAM_NOISE]*env_vol*(rand_float()))
-				Sample wave = (Sample{s, s}*env_vol*options.sine_wave) + (Sample{t, t}*env_vol*options.tri);
+				Sample wave = (Sample{s, s}*env_vol*options.sine_wave) + (Sample{t, t}*env_vol*options.tri_wave);
 				out += wave * master_vol + ((rand_float()*2.0f-1.0f)*options.noise*env_noise*master_vol);
 				//out = Sample{s, s} * master_vol;
 			}
@@ -1061,6 +1083,83 @@ struct Filter {
 	}
 };
 
+struct SineFeedback {
+	SineFeedbackOptions options;
+	Note notes[NOTES_MAX];
+
+	void process(float **inbuf, float **outbuf, SampleOffset samples) {
+		for (int i = 0; i < samples; ++i) {
+			Sample out = {};
+			Sample in = {};
+			if (inbuf && inbuf[0] && inbuf[1]) {
+				in = {inbuf[0][i], inbuf[1][i]};
+			}
+
+			for (int j = 0; j < NOTES_MAX; ++j) {
+				Note *note = &notes[j];
+
+				/*if (note->env.stage == ENVELOPE_OFF) continue;
+				env_vol = 0.0f;*/
+
+				if (note->env.stage == ENVELOPE_OFF && note->env3.stage == ENVELOPE_OFF) continue;
+				note->env.options.attack = options.attack;
+				note->env.options.release = options.release;
+				float env_vol = note->env.update();
+
+				float hz = 261.6255653006f *powf(2.0f, ((float)j-48.0f)/12.0f);
+
+				note->sine += (hz / (float)sample_rate) * PI2;
+				if (note->sine > PI2) note->sine -= PI2;
+
+				//float s1 = sinf(sinf(note->sine) * note->sine);
+				float s2 = sinf(sinf(sinf(note->sine * options.feedback3) * note->sine * options.feedback2) * note->sine * options.feedback1);
+				out += s2 * 0.5f * env_vol * master_vol;
+			}
+
+			outbuf[0][i] = out.left;
+			outbuf[1][i] = out.right;
+		}
+	}
+};
+
+struct Delay {
+	DelayOptions options;
+
+	/*Sample delay_line[sample_rate];
+	int delay_index;*/
+	DelayLine line;
+
+	void process(float **inbuf, float **outbuf, SampleOffset samples) {
+		line.init(sample_rate);
+		line.set_wrap(options.time);
+
+		for (int i = 0; i < samples; ++i) {
+			Sample out = {};
+			Sample in = {inbuf[0][i], inbuf[1][i]};
+
+			/*int index = delay_index - (1 + (float)array_size(delay_line)*options.time);
+			if (index < 0) index += array_size(delay_line);*/
+
+			/*delay_line[index].l *= options.feedback;
+			delay_line[index].r *= options.feedback;
+			out = {in.l + delay_line[index].l,
+				in.r + delay_line[index].r};*/
+
+			Sample d = line.load();
+			d *= options.feedback;
+			out = in + d;
+			line.store(out);
+
+			/*delay_line[delay_index].l += in.l;
+			delay_line[delay_index].r += in.r;
+			if (++delay_index >= array_size(delay_line)) delay_index = 0;*/
+
+			outbuf[0][i] = out.left;
+			outbuf[1][i] = out.right;
+		}
+	}
+};
+
 void synth_go(SynthDevice *device, SampleOffset samples, float **inbuf, float **outbuf /*Sample *in, Sample *out*/) {
 	//static float sine = 0.0f;
 
@@ -1285,16 +1384,16 @@ int main() {
 
 	drums.options.sine_wave = 0.5f;
 	drums.options.pitch = 0.5f;
-	drums.options.pitch_falloff = 0.5f;
+	drums.options.pitch_bend = 0.5f;
 	drums.options.attack = 0.5f;
-	drums.options.attack_start = 0.5f;
+	//drums.options.attack_start = 0.5f;
 	drums.options.release = 0.5f;
 	drums.options.noise = 0.5f;
 	drums.options.pitch_attack = 0.5f;
 	drums.options.pitch_release = 0.5f;
 	drums.options.noise_attack = 0.5f;
 	drums.options.noise_release = 0.5f;
-	drums.options.tri = 0.5f;
+	drums.options.tri_wave = 0.5f;
 	drums.options.env_pow = 0.5f;
 	drums.options.pitch_env_pow = 0.5f;
 

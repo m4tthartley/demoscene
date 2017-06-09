@@ -8,6 +8,7 @@ struct GfxRT {
 	GLuint fb;
 	GLuint tex[8];
 	int2 size;
+	int targets;
 };
 
 int2 gfx_size = {1920, 1080};
@@ -22,6 +23,8 @@ float2 gfx_quad_verts[] = {
 int gfx_cur_shader = -1;
 int gfx_draw_call_tex_stack = 0;
 GfxRT gfx_cur_rt;
+int rtd_index = 0;
+int rtd_size = 0;
 
 enum GfxRTFormat {
 	GFX_RGB,
@@ -49,7 +52,7 @@ GfxRT gfx_rt(float size, char *formats) {
 		GLint other_fmt = 0;
 		if (tok) {
 			if (strcmp(tok, "RGB")==0) {
-				tex_fmt = GL_RGB;
+				tex_fmt = GL_RGB32F;
 				other_fmt = GL_RGB;
 			}
 			if (strcmp(tok, "RGBA")==0) {
@@ -86,6 +89,7 @@ GfxRT gfx_rt(float size, char *formats) {
 		return {};
 	}
 	
+	rt.targets = fmt_count;
 
 	GLenum draw_buffers[] = {
 		GL_COLOR_ATTACHMENT0,
@@ -167,7 +171,7 @@ void gfx_rtut(char *name, GfxRT rt, int index = 0) {
 		glActiveTexture(GL_TEXTURE0 + gfx_draw_call_tex_stack);
 		glBindTexture(GL_TEXTURE_2D, rt.tex[index]);
 		int u_tex = glGetUniformLocation(shader_progs[gfx_cur_shader].prog, name); // todo: cache
-		glUniform1i(u_tex, 0);
+		glUniform1i(u_tex, gfx_draw_call_tex_stack);
 
 		++gfx_draw_call_tex_stack;
 	}
@@ -177,6 +181,7 @@ void gfx_draw_call() {
 	gfx_draw_call_tex_stack = 0;
 }
 void gfx_quad() {
+	glActiveTexture(GL_TEXTURE0);
 	if (gfx_cur_shader != -1) {
 		int u_pos = glGetAttribLocation(shader_progs[gfx_cur_shader].prog, "vertex_position"); // todo: cache attributes
 		glEnableVertexAttribArray(u_pos);
@@ -184,6 +189,26 @@ void gfx_quad() {
 	}
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 	gfx_draw_call();
+}
+
+void gfx_rtd_size(int size) {
+	rtd_size = size;
+}
+void gfx_rtd(GfxRT rt) {
+	// loop all color targets
+	glPushMatrix();
+	glTranslatef(-1.0f + (2.0f/(float)rtd_size)*(rtd_index%rtd_size), -1.0f + (2.0f/(float)rtd_size)*(rtd_index/rtd_size), 0.0f);
+	glEnable(GL_TEXTURE_2D);
+	glBindTexture(GL_TEXTURE_2D, rt.tex[0]);
+	glBegin(GL_QUADS);
+	glTexCoord2f(0.0f, 0.0f); glVertex2f(0.0f, 0.0f);
+	glTexCoord2f(1.0f, 0.0f); glVertex2f(2.0f / (float)rtd_size, 0.0f);
+	glTexCoord2f(1.0f, 1.0f); glVertex2f(2.0f / (float)rtd_size, 2.0f / (float)rtd_size);
+	glTexCoord2f(0.0f, 1.0f); glVertex2f(0.0f, 2.0f / (float)rtd_size);
+	glEnd();
+	glPopMatrix();
+
+	++rtd_index;
 }
 
 int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd) {
@@ -218,12 +243,13 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 	glViewport(0, 0, rain.window_width, rain.window_height);*/
 
 	GfxRT main_rt = gfx_rt(1.0f, "RGBA");
-	GfxRT post_rt = gfx_rt(1.0f, "RGB");
-	GfxRT test_rt = gfx_rt(1.0f, "RGB");
+	//GfxRT post_rt = gfx_rt(1.0f, "RGB");
+	//GfxRT test_rt = gfx_rt(1.0f, "RGB");
 
-	GfxRT dof_fields_rt = gfx_rt(1.0f, "RGBA, RGBA");
-	GfxRT dof1_rt = gfx_rt(1.0f, "RGBA, RGBA");
-	GfxRT dof2_rt = gfx_rt(1.0f, "RGBA, RGBA");
+	//GfxRT dof_fields_rt = gfx_rt(1.0f, "RGBA, RGBA");
+	GfxRT dof1_rt = gfx_rt(1.0f, "RGBA");
+	GfxRT dof2_rt = gfx_rt(1.0f, "RGBA");
+	GfxRT dofcoc_rt = gfx_rt(0.5f, "RGB");
 
 	//GLuint frame_texture2;
 	//glGenTextures(1, &frame_texture2);
@@ -311,8 +337,14 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 		//gfx_quad();
 
 		// dof separate pass
-		gfx_rtb(dof_fields_rt);
+		/*gfx_rtb(dof_fields_rt);
 		gfx_sh("shader.vert", "dof_separate.frag");
+		gfx_rtut("rt_tex", main_rt);
+		gfx_uf2("screen_res", rain.window_width, rain.window_height);
+		gfx_quad();*/
+
+		gfx_rtb(dofcoc_rt);
+		gfx_sh("shader.vert", "dof_coc.frag");
 		gfx_rtut("rt_tex", main_rt);
 		gfx_uf2("screen_res", rain.window_width, rain.window_height);
 		gfx_quad();
@@ -320,8 +352,10 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 		// dof pass
 		gfx_rtb(dof1_rt);
 		gfx_sh("shader.vert", "dof.frag");
-		gfx_rtut("rt_tex", dof_fields_rt, 0);
-		gfx_rtut("rt_tex2", dof_fields_rt, 1);
+		gfx_rtut("rt_tex", main_rt, 0);
+		gfx_rtut("rt_coc", dofcoc_rt, 0);
+		/*gfx_rtut("rt_tex", dof_fields_rt, 0);
+		gfx_rtut("rt_tex2", dof_fields_rt, 1);*/
 		gfx_uf2("screen_res", rain.window_width, rain.window_height);
 		gfx_quad();
 
@@ -329,6 +363,7 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 		gfx_rtb(dof2_rt);
 		gfx_sh("shader.vert", "dof2.frag");
 		gfx_rtut("rt_tex", dof1_rt);
+		gfx_rtut("rt_coc", dofcoc_rt, 0);
 		gfx_uf2("screen_res", rain.window_width, rain.window_height);
 		gfx_quad();
 
@@ -364,6 +399,14 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 		glTexCoord2f(1.0f, 1.0f); glVertex2f(1.0f, 1.0f);
 		glTexCoord2f(0.0f, 1.0f); glVertex2f(-1.0f, 1.0f);
 		glEnd();
+		rtd_index = 0; // todo: needs to be part of present()
+
+
+		gfx_rtd_size(4);
+		gfx_rtd(dofcoc_rt);
+		gfx_rtd(dof1_rt);
+		gfx_rtd(dof2_rt);
+		gfx_rtd(main_rt);
 
 		/*glPushMatrix();
 		glTranslatef(0.0f, 1.0f, 0.0f);

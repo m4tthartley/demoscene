@@ -7,7 +7,7 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Drums", "Drums\Drums.vcxpro
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Delay", "Delay\Delay.vcxproj", "{BFF6162C-C646-4A7F-86A0-57BFA34F64D4}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Feedloop", "Feedloop\Feedloop.vcxproj", "{51AE61DC-83FB-419C-AC87-87A962CFC904}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SineFeedback", "SineFeedback\SineFeedback.vcxproj", "{51AE61DC-83FB-419C-AC87-87A962CFC904}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Filter", "Filter\Filter.vcxproj", "{1AF11DD7-5E5C-48D2-8736-DE50B4CB97B0}"
 EndProject

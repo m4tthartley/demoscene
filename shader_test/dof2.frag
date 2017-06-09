@@ -1,6 +1,7 @@
 #version 330
 
 uniform sampler2D rt_tex;
+uniform sampler2D rt_coc;
 uniform vec2 screen_res;
 in vec2 screen_pos;
 out vec3 frag;
@@ -67,6 +68,6 @@ void main() {
 	}
 	frag = brightest;
 
-	// frag = texture(rt_tex, screen_pos*0.5+0.5).rgb;
+	frag = texture(rt_tex, screen_pos*0.5+0.5).rgb;
 	// frag = vec3(texture(rt_tex, screen_pos*0.5+0.5).a, 0.0, 0.0)/100.0;
 }
