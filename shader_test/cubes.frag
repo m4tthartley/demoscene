@@ -36,15 +36,16 @@ SceneResult scene(vec3 pos) {
 	float mixer = min(step(fract(pos.x/10.0), 0.05), step(fract(pos.z/10.0), 0.05));
 	SceneResult cube_floor = SceneResult(a, pos, mat_mix(Material(vec3(1.0), 0.0, 0.0, vec3(0.0)), Material(vec3(1.0, 0.0, 0.0), 0.0, 0.0, vec3(1.0, 0.0, 0.1)), mixer));
 
-	a = cube(pos, vec3(-50.0, 5.0, -50.0), vec3(0.25));
-	a = union(a, cube(pos, vec3( 50.0, 5.0, -50.0), vec3(0.25)));
-	a = union(a, cube(pos, vec3( 50.0, 5.0,  50.0), vec3(0.25)));
-	a = union(a, cube(pos, vec3(-50.0, 5.0,  50.0), vec3(0.25)));
+	a = cube(pos, vec3(-50.0, 5.0, -50.0), vec3(0.03));
+	a = union(a, cube(pos, vec3( 50.0, 5.0, -50.0), vec3(0.5)));
+	a = union(a, cube(pos, vec3( 50.0, 5.0,  50.0), vec3(0.5)));
+	a = union(a, cube(pos, vec3(-50.0, 5.0,  50.0), vec3(0.5)));
 	SceneResult floating_cubes = SceneResult(a, pos, Material(vec3(15.0, 15.0, 15.0), 0.0, 0.0, vec3(1.0)));
 	SceneResult sr = sr_union(cube_floor, floating_cubes);
 	//sr = sr_union(sr, SceneResult(plane(pos, vec4(0.0, 0.0, 1.0, 30.0)), pos, Material(vec3(1.0), 1.0, 0.0)));
 	sr = sr_union(sr, SceneResult(cube(pos, vec3(0.0, 3.2, 0.0), vec3(1.0, 2.0, 1.0)), pos, Material(vec3(0.0, 0.5, 1.0), 0.0, 0.0, vec3(0.0))));
 	sr = sr_union(sr, SceneResult(cube(pos, vec3(0.0, 3.2, 15.0), vec3(1.0, 2.0, 1.0)), pos, Material(vec3(1.0, 0.5, 0.0), 0.0, 0.0, vec3(0.0))));
+	sr = sr_union(sr, SceneResult(cube(pos, vec3(6.5, 3.2, 20.0), vec3(1.0, 2.0, 1.0)), pos, Material(vec3(0.0, 1.0, 0.0), 0.0, 0.0, vec3(0.0))));
 	sr = sr_union(sr, SceneResult(cube(pos, vec3(3.0, 3.2, -15.0), vec3(1.0, 2.0, 1.0)), pos, Material(vec3(1.0, 0.0, 1.0), 0.0, 0.0, vec3(0.0))));
 	return sr;
 }

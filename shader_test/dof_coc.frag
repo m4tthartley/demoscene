@@ -11,7 +11,7 @@ out vec3 frag;
 void main() {
 	float depth = texture(rt_tex, screen_pos*0.5+0.5).a;
 	float coc = get_coc_signed(depth);
-	float r = max(coc, 0.0);
-	float g = abs(min(coc, 0.0));
+	float r = min(max(coc, 0.0), 50.0);
+	float g = min(abs(min(coc, 0.0)), 50.0);
 	frag = vec3(r/* /30.0 */, g/* /30.0 */, 0.0);
 }

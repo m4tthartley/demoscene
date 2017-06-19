@@ -46,7 +46,7 @@ void main() {
 
 	vec2 pix = vec2(1.0) / screen_res;
 	vec3 color = vec3(0.0);
-	float disc = get_coc(depth);
+	// float disc = get_coc(depth);
 	// disc = pow(abs(depth - focus), 0.8);
 	// int samples = /* 64 */ 7*7;
 	// vec3 brightest = vec3(0.0);
@@ -54,13 +54,17 @@ void main() {
 	// 	vec2 pos = vec2(-3.0+(i%7), -3.0+(i/7));
 	// 	brightest = max(brightest, texture(rt_tex, (screen_pos*0.5+0.5) + (square_to_disk(pos)*(pix/2.0)*disc)).rgb);
 	// }
-	vec3 brightest = vec3(0.0);
+
+	float disc = texture(rt_coc, screen_pos*0.5+0.5).r;
+
+	vec3 brightest = texture(rt_tex, screen_pos*0.5+0.5).rgb;
 	int samples = 6;
 	for (int y = 0; y < samples; ++y) {
 		for (int x = 0; x < samples; ++x) {
 			vec2 d = square_to_disk(vec2(-1.0+(x/((samples-1)*0.5)), -1.0+(y/((samples-1)*0.5))));
 			vec2 coord = (screen_pos*0.5+0.5) + (d*(pix/2.0)*disc);
-			vec4 samp = texture(rt_tex, coord);
+			float weight = (texture(rt_coc, coord).r/30.0);
+			vec4 samp = texture(rt_tex, coord) * weight;
 			/* if (samp.a >= depth-1.0) */ {
 				brightest = max(brightest, samp.rgb);
 			}

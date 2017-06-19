@@ -249,7 +249,8 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 	//GfxRT dof_fields_rt = gfx_rt(1.0f, "RGBA, RGBA");
 	GfxRT dof1_rt = gfx_rt(1.0f, "RGBA");
 	GfxRT dof2_rt = gfx_rt(1.0f, "RGBA");
-	GfxRT dofcoc_rt = gfx_rt(0.5f, "RGB");
+	GfxRT dofcoc_rt = gfx_rt(1.0f, "RGB");
+	GfxRT dof_coc_tile_rt = gfx_rt(0.02f, "RGB");
 
 	//GLuint frame_texture2;
 	//glGenTextures(1, &frame_texture2);
@@ -343,10 +344,19 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 		gfx_uf2("screen_res", rain.window_width, rain.window_height);
 		gfx_quad();*/
 
+		// output CoC
 		gfx_rtb(dofcoc_rt);
 		gfx_sh("shader.vert", "dof_coc.frag");
 		gfx_rtut("rt_tex", main_rt);
 		gfx_uf2("screen_res", rain.window_width, rain.window_height);
+		gfx_quad();
+
+		// output CoC tiles
+		gfx_rtb(dof_coc_tile_rt);
+		gfx_sh("shader.vert", "dof_coc_tile.frag");
+		gfx_rtut("rt_tex", dofcoc_rt);
+		gfx_uf2("screen_res", rain.window_width, rain.window_height);
+		gfx_uf2("coc_tile_res", dof_coc_tile_rt.size.x, dof_coc_tile_rt.size.y);
 		gfx_quad();
 
 		// dof pass
@@ -354,6 +364,7 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 		gfx_sh("shader.vert", "dof.frag");
 		gfx_rtut("rt_tex", main_rt, 0);
 		gfx_rtut("rt_coc", dofcoc_rt, 0);
+		gfx_rtut("rt_coc_tile", dof_coc_tile_rt, 0);
 		/*gfx_rtut("rt_tex", dof_fields_rt, 0);
 		gfx_rtut("rt_tex2", dof_fields_rt, 1);*/
 		gfx_uf2("screen_res", rain.window_width, rain.window_height);
@@ -402,11 +413,12 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 		rtd_index = 0; // todo: needs to be part of present()
 
 
-		gfx_rtd_size(4);
+		gfx_rtd_size(3);
 		gfx_rtd(dofcoc_rt);
+		gfx_rtd(dof_coc_tile_rt);
 		gfx_rtd(dof1_rt);
-		gfx_rtd(dof2_rt);
-		gfx_rtd(main_rt);
+		/*gfx_rtd(dof2_rt);
+		gfx_rtd(main_rt);*/
 
 		/*glPushMatrix();
 		glTranslatef(0.0f, 1.0f, 0.0f);
