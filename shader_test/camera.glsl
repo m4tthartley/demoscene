@@ -4,7 +4,7 @@ float film_format = 35.0;
 float fov = degrees(2.0 * atan(film_size / (2.0*film_format)));
 float focal_length = (0.5*film_format/* film_format */) / tan(fov / 2.0);
 
-float aperture = focal_length / 5.0; // 1.4
+float aperture = focal_length / 2.0; // 1.4
 float focus = 25.0;
 // float dist = 10.0;
 //float coc = aperture * ((focal_length*(focus-dist))/(dist*(focus-focal_length)));

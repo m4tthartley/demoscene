@@ -27,10 +27,13 @@ void main() {
 		}
 	}
 
+	if (res.r > res.g) res.g = 0.0;
+	else res.r = 0.0;
+
 	// float r = texture(rt_tex, screen_pos*0.5+0.5).r;
 	// float g = texture(rt_tex, screen_pos*0.5+0.5).g;
 
-	frag = vec3(res, 0.0) /* / 30.0 */;
+	frag = vec3(res /* /30.0 */ , 0.0) /* / 30.0 */;
 
 	// float r = max(coc, 0.0);
 	// float g = abs(min(coc, 0.0));

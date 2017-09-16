@@ -13,5 +13,5 @@ void main() {
 	float coc = get_coc_signed(depth);
 	float r = min(max(coc, 0.0), 50.0);
 	float g = min(abs(min(coc, 0.0)), 50.0);
-	frag = vec3(r/* /30.0 */, g/* /30.0 */, 0.0);
+	frag = vec3(r, g, 0.0) /* / 50.0 */;
 }

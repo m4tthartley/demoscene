@@ -30,11 +30,15 @@ enum GfxRTFormat {
 	GFX_RGB,
 	GFX_RGBA,
 };
+enum GfxTexSampling {
+	GFX_LINEAR,
+	GFX_NEAREST,
+};
 //#define gfx_rt(size, ...) ({\
 //	GfxRTFormat formats[] = {__VA_ARGS__};\
 //	_gfx_rt(size, formats, array_size(formats));\
 //})
-GfxRT gfx_rt(float size, char *formats) {
+GfxRT gfx_rt(float size, char *formats, GfxTexSampling sampling = GFX_LINEAR) {
 	GfxRT rt;
 
 	glGenFramebuffers(1, &rt.fb);
@@ -64,8 +68,13 @@ GfxRT gfx_rt(float size, char *formats) {
 				glGenTextures(1, &rt.tex[fmt_count]);
 				glBindTexture(GL_TEXTURE_2D, rt.tex[fmt_count]);
 				glTexImage2D(GL_TEXTURE_2D, 0, tex_fmt, rt.size.w, rt.size.h, 0, other_fmt, GL_FLOAT/*GL_UNSIGNED_BYTE*/, 0); // todo: RGBA
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+				if (sampling == GFX_LINEAR) {
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+				} else {
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+				}
 				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
 				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
 				glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + fmt_count, rt.tex[fmt_count], 0);
@@ -250,7 +259,7 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 	GfxRT dof1_rt = gfx_rt(1.0f, "RGBA");
 	GfxRT dof2_rt = gfx_rt(1.0f, "RGBA");
 	GfxRT dofcoc_rt = gfx_rt(1.0f, "RGB");
-	GfxRT dof_coc_tile_rt = gfx_rt(0.02f, "RGB");
+	GfxRT dof_coc_tile_rt = gfx_rt(0.05f, "RGB", GFX_NEAREST);
 
 	//GLuint frame_texture2;
 	//glGenTextures(1, &frame_texture2);
@@ -414,54 +423,11 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 
 
 		gfx_rtd_size(3);
+		//gfx_rtd(dofcoc_rt);
+		gfx_rtd(main_rt);
 		gfx_rtd(dofcoc_rt);
-		gfx_rtd(dof_coc_tile_rt);
 		gfx_rtd(dof1_rt);
 		/*gfx_rtd(dof2_rt);
-		gfx_rtd(main_rt);*/
-
-		/*glPushMatrix();
-		glTranslatef(0.0f, 1.0f, 0.0f);
-		glEnable(GL_TEXTURE_2D);
-		glBindTexture(GL_TEXTURE_2D, main_rt.tex);
-		glBegin(GL_QUADS);
-		glTexCoord2f(0.0f, 0.0f); glVertex2f(-1.0f, -1.0f);
-		glTexCoord2f(1.0f, 0.0f); glVertex2f(0.0f, -1.0f);
-		glTexCoord2f(1.0f, 1.0f); glVertex2f(0.0f, 0.0f);
-		glTexCoord2f(0.0f, 1.0f); glVertex2f(-1.0f, 0.0f);
-		glEnd();
-		glPopMatrix();
-
-		glPushMatrix();
-		glTranslatef(1.0f, 1.0f, 0.0f);
-		glEnable(GL_TEXTURE_2D);
-		glBindTexture(GL_TEXTURE_2D, post_rt.tex);
-		glBegin(GL_QUADS);
-		glTexCoord2f(0.0f, 0.0f); glVertex2f(-1.0f, -1.0f);
-		glTexCoord2f(1.0f, 0.0f); glVertex2f(0.0f, -1.0f);
-		glTexCoord2f(1.0f, 1.0f); glVertex2f(0.0f, 0.0f);
-		glTexCoord2f(0.0f, 1.0f); glVertex2f(-1.0f, 0.0f);
-		glEnd();
-		glPopMatrix();
-
-		glPushMatrix();
-		glTranslatef(0.0f, 0.0f, 0.0f);
-		glEnable(GL_TEXTURE_2D);
-		glBindTexture(GL_TEXTURE_2D, test_rt.tex);
-		glBegin(GL_QUADS);
-		glTexCoord2f(0.0f, 0.0f); glVertex2f(-1.0f, -1.0f);
-		glTexCoord2f(1.0f, 0.0f); glVertex2f(0.0f, -1.0f);
-		glTexCoord2f(1.0f, 1.0f); glVertex2f(0.0f, 0.0f);
-		glTexCoord2f(0.0f, 1.0f); glVertex2f(-1.0f, 0.0f);
-		glEnd();
-		glPopMatrix();*/
+		*/
 	}
-
-	float a = 5.0;
-	float b = a * 0.5;
-
-	float c = 5.0f;
-	float d = c * 0.5f;
-
-	printf("%f %f \n", b, d);
 }

@@ -55,23 +55,34 @@ void main() {
 	// 	brightest = max(brightest, texture(rt_tex, (screen_pos*0.5+0.5) + (square_to_disk(pos)*(pix/2.0)*disc)).rgb);
 	// }
 
-	float disc = texture(rt_coc, screen_pos*0.5+0.5).r;
+	float farcoc = texture(rt_coc, screen_pos*0.5+0.5).r;
 
 	vec3 brightest = texture(rt_tex, screen_pos*0.5+0.5).rgb;
-	int samples = 6;
-	for (int y = 0; y < samples; ++y) {
-		for (int x = 0; x < samples; ++x) {
-			vec2 d = square_to_disk(vec2(-1.0+(x/((samples-1)*0.5)), -1.0+(y/((samples-1)*0.5))));
-			vec2 coord = (screen_pos*0.5+0.5) + (d*(pix/2.0)*disc);
-			float weight = (texture(rt_coc, coord).r/30.0);
-			vec4 samp = texture(rt_tex, coord) * weight;
-			/* if (samp.a >= depth-1.0) */ {
-				brightest = max(brightest, samp.rgb);
+	int samples = 3;
+	if (false/* texture(rt_coc, screen_pos*0.5+0.5).r > 0.0 */) {
+		for (int y = 0; y < 4; ++y) {
+			for (int x = 0; x < 4; ++x) {
+				// vec2 d = square_to_disk(vec2(-0.5+(x/3.0 * 1.0), -0.5+(y/3.0 * 1.0)));
+				// vec2 coord = (screen_pos*0.5+0.5) + (d*disc);
+				vec2 d = square_to_disk(vec2(-0.5) + vec2(x, y)/vec2(3.0));
+				vec2 coord = (screen_pos*0.5+0.5) + (d*0.0001*farcoc*vec2(screen_res.y/screen_res.x, 1.0));
+
+				float weight = (texture(rt_coc, coord).r / 5.0);
+				vec4 samp = texture(rt_tex, coord) /* * weight */;
+				{
+					brightest = max(brightest, samp.rgb);
+				}
 			}
 		}
+		// frag = mix(texture(rt_tex, screen_pos*0.5+0.5).rgb, brightest, farcoc / 50.0);
+		frag = brightest;
+		// frag = texture(rt_tex, screen_pos*0.5+0.5).rgb;
+	} else {
+		frag = texture(rt_tex, screen_pos*0.5+0.5).rgb;
 	}
-	frag = brightest;
+	
+	// frag = texture(rt_tex, screen_pos*0.5+0.5).rgb;
 
-	frag = texture(rt_tex, screen_pos*0.5+0.5).rgb;
+	// frag = vec3(1.0, 0.0, 0.0);
 	// frag = vec3(texture(rt_tex, screen_pos*0.5+0.5).a, 0.0, 0.0)/100.0;
 }

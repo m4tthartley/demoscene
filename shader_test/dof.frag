@@ -2,7 +2,7 @@
 
 uniform sampler2D rt_tex;
 uniform sampler2D rt_coc;
-uniform sampler2D rt_coc_tile;
+// uniform sampler2D rt_coc_tile;
 uniform vec2 screen_res;
 in vec2 screen_pos;
 out vec4 frag;
@@ -41,8 +41,8 @@ vec2 square_to_disk(vec2 sq) {
 }
 
 void main() {
-	float focus = 30.0;
-	float depth = texture(rt_tex, screen_pos*0.5+0.5).a;
+	// float focus = 30.0;
+	// float depth = texture(rt_tex, screen_pos*0.5+0.5).a;
 
 	vec2 pix = vec2(1.0) / screen_res;
 	vec3 color = vec3(0.0);
@@ -51,22 +51,42 @@ void main() {
 	float total_weight = 0.0;
 
 	// float disc = get_coc(depth);
-	float disc = texture(rt_coc, screen_pos*0.5+0.5).r;
-	{
+	float farcoc = texture(rt_coc, screen_pos*0.5+0.5).r;
+	float nearcoc = texture(rt_coc, screen_pos*0.5+0.5).g;
+	// vec3 c = vec3(0.0);
+	// if (texture(rt_coc, screen_pos*0.5+0.5).r > 0.0) {
 		int samples = 64;
 		// int actual_samples = 0;
-		for (int y = 0; y < 8; ++y) {
-			for (int x = 0; x < 8; ++x) {
-				vec2 d = square_to_disk(vec2(-1.0+(x*(1.0/3.5)), -1.0+(y*(1.0/3.5))));
-				vec2 coord = (screen_pos*0.5+0.5) + (d*(pix/2.0)*disc);
+		for (int y = 0; y < 16; ++y) {
+			for (int x = 0; x < 16; ++x) {
+				// vec2 d = square_to_disk(vec2(-1.0+(x*(1.0/3.5)), -1.0+(y*(1.0/3.5))));
 
-				float weight = (texture(rt_coc, coord).r /* /50.0 */);
-				color += pow(texture(rt_tex, coord).rgb, vec3(1.0)) /* * (disc) */ * weight * 1.0;
-				// ++actual_samples;
-				total_weight += weight;
+				// vec2 d = square_to_disk(vec2(-1.0+(x/7.0 * 2.0), -1.0+(y/7.0 * 2.0)));
+				// vec2 coord = (screen_pos*0.5+0.5) + (d*farcoc*0.0004*vec2(1.0, screen_res.x/screen_res.y));
+
+				if (farcoc > 0.0) {
+					vec2 d = square_to_disk(vec2(-0.5) + vec2(x, y)/vec2(15.0));
+					vec2 coord = (screen_pos*0.5+0.5) + (d*0.0005*farcoc*vec2(screen_res.y/screen_res.x, 1.0));
+
+					float weight = pow(texture(rt_coc, coord).r, 1.0);
+					color += pow(texture(rt_tex, coord).rgb, vec3(1.0)) * pow(weight, 1.1);
+					total_weight += weight;
+				}
+				if (nearcoc > 0.0) {
+					vec2 d = square_to_disk(vec2(-0.5) + vec2(x, y)/vec2(15.0));
+					vec2 coord = (screen_pos*0.5+0.5) + (d*0.002*nearcoc*vec2(screen_res.y/screen_res.x, 1.0));
+
+					color += texture(rt_tex, coord).rgb;
+					total_weight += 1.0;
+				}
 			}
 		}
-	}
+
+		frag = vec4(color/total_weight, 1.0);
+		// frag = vec4(texture(rt_tex, screen_pos*0.5+0.5).rgb, 1.0);
+	// } else {
+	// 	frag = texture(rt_tex, screen_pos*0.5+0.5);
+	// }
 
 	// disc = texture(rt_coc_tile, screen_pos*0.5+0.5).g;
 	// {
@@ -83,9 +103,4 @@ void main() {
 	// 		}
 	// 	}
 	// }
-
-	frag = vec4(color/total_weight /* float(actual_samples) */, /* depth */0.0);
-
-	// frag = vec4(texture(rt_tex, screen_pos*0.5+0.5).rgb / 1.0, 0.0);
-	// frag = vec3(texture(rt_tex, screen_pos*0.5+0.5).a, 0.0, 0.0)/100.0;
 }
