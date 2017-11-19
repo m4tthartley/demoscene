@@ -205,19 +205,20 @@ void gfx_rtd_size(int size) {
 }
 void gfx_rtd(GfxRT rt) {
 	// loop all color targets
-	glPushMatrix();
-	glTranslatef(-1.0f + (2.0f/(float)rtd_size)*(rtd_index%rtd_size), -1.0f + (2.0f/(float)rtd_size)*(rtd_index/rtd_size), 0.0f);
-	glEnable(GL_TEXTURE_2D);
-	glBindTexture(GL_TEXTURE_2D, rt.tex[0]);
-	glBegin(GL_QUADS);
-	glTexCoord2f(0.0f, 0.0f); glVertex2f(0.0f, 0.0f);
-	glTexCoord2f(1.0f, 0.0f); glVertex2f(2.0f / (float)rtd_size, 0.0f);
-	glTexCoord2f(1.0f, 1.0f); glVertex2f(2.0f / (float)rtd_size, 2.0f / (float)rtd_size);
-	glTexCoord2f(0.0f, 1.0f); glVertex2f(0.0f, 2.0f / (float)rtd_size);
-	glEnd();
-	glPopMatrix();
-
-	++rtd_index;
+	for (int i = 0; i < rt.targets; ++i) {
+		glPushMatrix();
+		glTranslatef(-1.0f + (2.0f/(float)rtd_size)*(rtd_index%rtd_size), -1.0f + (2.0f/(float)rtd_size)*(rtd_index/rtd_size), 0.0f);
+		glEnable(GL_TEXTURE_2D);
+		glBindTexture(GL_TEXTURE_2D, rt.tex[i]);
+		glBegin(GL_QUADS);
+		glTexCoord2f(0.0f, 0.0f); glVertex2f(0.0f, 0.0f);
+		glTexCoord2f(1.0f, 0.0f); glVertex2f(2.0f / (float)rtd_size, 0.0f);
+		glTexCoord2f(1.0f, 1.0f); glVertex2f(2.0f / (float)rtd_size, 2.0f / (float)rtd_size);
+		glTexCoord2f(0.0f, 1.0f); glVertex2f(0.0f, 2.0f / (float)rtd_size);
+		glEnd();
+		glPopMatrix();
+		++rtd_index;
+	}
 }
 
 int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd) {
@@ -232,53 +233,17 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 	int shader = create_shader_vf("shader.vert", "shader.frag");
 	int blur_shader = create_shader_vf("shader.vert", "blur.frag");
 
-	/*GLuint frame_texture;
-	glGenTextures(1, &frame_texture);
-	glBindTexture(GL_TEXTURE_2D, frame_texture);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, rain.window_width, rain.window_height, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-	GLuint framebuffer;
-	glGenFramebuffers(1, &framebuffer);
-	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-	glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, frame_texture, 0);
-	GLenum draw_buffers[] = {GL_COLOR_ATTACHMENT0};
-	glDrawBuffers(1, draw_buffers);
-	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-		__debugbreak();
-	}
-	glViewport(0, 0, rain.window_width, rain.window_height);*/
-
 	GfxRT main_rt = gfx_rt(1.0f, "RGBA");
-	//GfxRT post_rt = gfx_rt(1.0f, "RGB");
-	//GfxRT test_rt = gfx_rt(1.0f, "RGB");
 
-	//GfxRT dof_fields_rt = gfx_rt(1.0f, "RGBA, RGBA");
+	GfxRT dof_fields1_rt = gfx_rt(1.0f, "RGBA, RGBA");
+	GfxRT dof_fields2_rt = gfx_rt(1.0f, "RGBA, RGBA");
+	GfxRT dof_fields3_rt = gfx_rt(1.0f, "RGBA, RGBA");
+	GfxRT dof_final_rt = gfx_rt(1.0f, "RGBA");
+
 	GfxRT dof1_rt = gfx_rt(1.0f, "RGBA");
 	GfxRT dof2_rt = gfx_rt(1.0f, "RGBA");
 	GfxRT dofcoc_rt = gfx_rt(1.0f, "RGB");
-	GfxRT dof_coc_tile_rt = gfx_rt(0.05f, "RGB", GFX_NEAREST);
-
-	//GLuint frame_texture2;
-	//glGenTextures(1, &frame_texture2);
-	//glBindTexture(GL_TEXTURE_2D, frame_texture2);
-	//glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, rain.window_width, rain.window_height, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
-	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-	//GLuint framebuffer2;
-	//glGenFramebuffers(1, &framebuffer2);
-	//glBindFramebuffer(GL_FRAMEBUFFER, framebuffer2);
-	//glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, frame_texture2, 0);
-	////draw_buffers = {GL_COLOR_ATTACHMENT0};
-	//glDrawBuffers(1, draw_buffers);
-	//if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-	//	__debugbreak();
-	//}
-	//glViewport(0, 0, rain.window_width, rain.window_height);
+	GfxRT dof_coc_tile_rt = gfx_rt(0.05f, "RGB"/*, GFX_NEAREST*/);
 
 	while (!rain.quit) {
 		rain_update(&rain);
@@ -346,13 +311,6 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 		//gfx_rtut("rt_tex", post_rt);
 		//gfx_quad();
 
-		// dof separate pass
-		/*gfx_rtb(dof_fields_rt);
-		gfx_sh("shader.vert", "dof_separate.frag");
-		gfx_rtut("rt_tex", main_rt);
-		gfx_uf2("screen_res", rain.window_width, rain.window_height);
-		gfx_quad();*/
-
 		// output CoC
 		gfx_rtb(dofcoc_rt);
 		gfx_sh("shader.vert", "dof_coc.frag");
@@ -368,10 +326,19 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 		gfx_uf2("coc_tile_res", dof_coc_tile_rt.size.x, dof_coc_tile_rt.size.y);
 		gfx_quad();
 
+		// dof separate pass
+		gfx_rtb(dof_fields1_rt);
+		gfx_sh("shader.vert", "dof_separate.frag");
+		gfx_rtut("rt_tex", main_rt);
+		gfx_rtut("rt_coc", dofcoc_rt);
+		gfx_uf2("screen_res", rain.window_width, rain.window_height);
+		gfx_quad();
+
 		// dof pass
-		gfx_rtb(dof1_rt);
+		gfx_rtb(dof_fields2_rt);
 		gfx_sh("shader.vert", "dof.frag");
-		gfx_rtut("rt_tex", main_rt, 0);
+		gfx_rtut("rt_far", dof_fields1_rt, 0);
+		gfx_rtut("rt_near", dof_fields1_rt, 1);
 		gfx_rtut("rt_coc", dofcoc_rt, 0);
 		gfx_rtut("rt_coc_tile", dof_coc_tile_rt, 0);
 		/*gfx_rtut("rt_tex", dof_fields_rt, 0);
@@ -380,9 +347,20 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 		gfx_quad();
 
 		// dof pass 2
-		gfx_rtb(dof2_rt);
+		gfx_rtb(dof_fields3_rt);
 		gfx_sh("shader.vert", "dof2.frag");
-		gfx_rtut("rt_tex", dof1_rt);
+		gfx_rtut("rt_far", dof_fields2_rt, 0);
+		gfx_rtut("rt_near", dof_fields2_rt, 1);
+		gfx_rtut("rt_coc", dofcoc_rt, 0);
+		gfx_uf2("screen_res", rain.window_width, rain.window_height);
+		gfx_quad();
+
+		// composite pass
+		gfx_rtb(dof_final_rt);
+		gfx_sh("shader.vert", "dof_composite.frag");
+		gfx_rtut("rt_far", dof_fields3_rt, 0);
+		gfx_rtut("rt_near", dof_fields3_rt, 1);
+		gfx_rtut("rt_main", main_rt);
 		gfx_rtut("rt_coc", dofcoc_rt, 0);
 		gfx_uf2("screen_res", rain.window_width, rain.window_height);
 		gfx_quad();
@@ -422,12 +400,14 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 		rtd_index = 0; // todo: needs to be part of present()
 
 
-		gfx_rtd_size(3);
-		//gfx_rtd(dofcoc_rt);
-		gfx_rtd(main_rt);
+		gfx_rtd_size(4);
+		//gfx_rtd(main_rt);
+		//gfx_rtd(dof_coc_tile_rt);
+		//gfx_rtd(dof_fields2_rt);
+
+		/*
 		gfx_rtd(dofcoc_rt);
-		gfx_rtd(dof1_rt);
-		/*gfx_rtd(dof2_rt);
-		*/
+		
+		gfx_rtd(dof_fields2_rt);*/
 	}
 }

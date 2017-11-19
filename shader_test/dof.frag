@@ -1,11 +1,13 @@
 #version 330
 
-uniform sampler2D rt_tex;
+uniform sampler2D rt_far;
+uniform sampler2D rt_near;
 uniform sampler2D rt_coc;
-// uniform sampler2D rt_coc_tile;
+uniform sampler2D rt_coc_tile;
 uniform vec2 screen_res;
 in vec2 screen_pos;
-out vec4 frag;
+out vec4 fragfar;
+out vec4 fragnear;
 
 #include "math.glsl"
 #include "camera.glsl"
@@ -45,10 +47,13 @@ void main() {
 	// float depth = texture(rt_tex, screen_pos*0.5+0.5).a;
 
 	vec2 pix = vec2(1.0) / screen_res;
-	vec3 color = vec3(0.0);
-	// disc = pow(abs(depth - focus), 0.8);
 
-	float total_weight = 0.0;
+	vec4 color_far = vec4(0.0);
+	float total_weight_far = 1.0;
+	vec4 color_near = vec4(0.0);
+	float total_weight_near = 1.0;
+	float final_near_coc = 0.0;
+	float final_near_coc_total = 1.0;
 
 	// float disc = get_coc(depth);
 	float farcoc = texture(rt_coc, screen_pos*0.5+0.5).r;
@@ -68,22 +73,47 @@ void main() {
 					vec2 d = square_to_disk(vec2(-0.5) + vec2(x, y)/vec2(15.0));
 					vec2 coord = (screen_pos*0.5+0.5) + (d*0.0005*farcoc*vec2(screen_res.y/screen_res.x, 1.0));
 
-					float weight = pow(texture(rt_coc, coord).r, 1.0);
-					color += pow(texture(rt_tex, coord).rgb, vec3(1.0)) * pow(weight, 1.1);
-					total_weight += weight;
+					float weight = pow(texture(rt_coc, coord).r, 1.0) / 50.0;
+					color_far += pow(texture(rt_far, coord), vec4(1.0)) * pow(weight, 1.0);
+					total_weight_far += weight;
 				}
-				if (nearcoc > 0.0) {
-					vec2 d = square_to_disk(vec2(-0.5) + vec2(x, y)/vec2(15.0));
-					vec2 coord = (screen_pos*0.5+0.5) + (d*0.002*nearcoc*vec2(screen_res.y/screen_res.x, 1.0));
 
-					color += texture(rt_tex, coord).rgb;
-					total_weight += 1.0;
-				}
+				float near_tile_max = texture(rt_coc_tile, screen_pos*0.5+0.5).g / 50.0;
+				/* if (nearcoc > 0.0) */ {
+					float scale = 0.75 + nearcoc/200.0 ;//>= near_tile_max ? 1.0 : (near_tile_max - nearcoc);
+					// scale = max(scale, 0.5);
+					vec2 d = square_to_disk(vec2(-0.5) + vec2(x, y)/vec2(15.0));
+					vec2 coord = (screen_pos*0.5+0.5) + (d*0.002*(scale*50.0)*vec2(screen_res.y/screen_res.x, 1.0));
+
+					float sample_coc = texture(rt_coc, coord).g / 50.0;
+					//float weight = sample_coc >= near_tile_max ? 1.0 : (near_tile_max - sample_coc);
+					float weight = 0.2 + sample_coc;
+					color_near += texture(rt_near, coord) /* * sample_coc */ * weight;
+					total_weight_near += weight;
+
+
+
+
+					// final_near_coc += texture(rt_coc, coord).g * weight;
+					// final_near_coc_total += weight;
+				} /* else {
+					vec2 d = square_to_disk(vec2(-0.5) + vec2(x, y)/vec2(15.0));
+					vec2 coord = (screen_pos*0.5+0.5) + (d*0.002*50.0*vec2(screen_res.y/screen_res.x, 1.0));
+
+					color_near += texture(rt_near, coord).rgb;
+					total_weight_near += 1.0;
+					final_near_coc += texture(rt_coc, coord).g;
+					final_near_coc_total += 1.0;
+				} */
 			}
 		}
 
-		frag = vec4(color/total_weight, 1.0);
-		// frag = vec4(texture(rt_tex, screen_pos*0.5+0.5).rgb, 1.0);
+		fragfar = color_far/total_weight_far;
+		fragnear = color_near/total_weight_near;
+		// fragnear = vec4(fragnear.a/50.0, 0.0, 0.0, 0.0);
+
+		// fragnear = vec4(final_near_coc/final_near_coc_total / 50.0, 0.0, 0.0, 1.0);
+		// fragnear = vec4(texture(rt_near, screen_pos*0.5+0.5).rgb, 1.0);
 	// } else {
 	// 	frag = texture(rt_tex, screen_pos*0.5+0.5);
 	// }

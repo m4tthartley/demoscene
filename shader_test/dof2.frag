@@ -1,10 +1,12 @@
 #version 330
 
-uniform sampler2D rt_tex;
+uniform sampler2D rt_far;
+uniform sampler2D rt_near;
 uniform sampler2D rt_coc;
 uniform vec2 screen_res;
 in vec2 screen_pos;
-out vec3 frag;
+out vec4 fragfar;
+out vec4 fragnear;
 
 #include "math.glsl"
 #include "camera.glsl"
@@ -41,10 +43,10 @@ vec2 square_to_disk(vec2 sq) {
 
 void main() {
 
-	float focus = 30.0;
-	float depth = texture(rt_tex, screen_pos*0.5+0.5).a;
+	// float focus = 30.0;
+	// float depth = texture(rt_tex, screen_pos*0.5+0.5).a;
 
-	vec2 pix = vec2(1.0) / screen_res;
+	// vec2 pix = vec2(1.0) / screen_res;
 	vec3 color = vec3(0.0);
 	// float disc = get_coc(depth);
 	// disc = pow(abs(depth - focus), 0.8);
@@ -55,34 +57,28 @@ void main() {
 	// 	brightest = max(brightest, texture(rt_tex, (screen_pos*0.5+0.5) + (square_to_disk(pos)*(pix/2.0)*disc)).rgb);
 	// }
 
-	float farcoc = texture(rt_coc, screen_pos*0.5+0.5).r;
-
-	vec3 brightest = texture(rt_tex, screen_pos*0.5+0.5).rgb;
-	int samples = 3;
-	if (false/* texture(rt_coc, screen_pos*0.5+0.5).r > 0.0 */) {
-		for (int y = 0; y < 4; ++y) {
-			for (int x = 0; x < 4; ++x) {
-				// vec2 d = square_to_disk(vec2(-0.5+(x/3.0 * 1.0), -0.5+(y/3.0 * 1.0)));
-				// vec2 coord = (screen_pos*0.5+0.5) + (d*disc);
-				vec2 d = square_to_disk(vec2(-0.5) + vec2(x, y)/vec2(3.0));
-				vec2 coord = (screen_pos*0.5+0.5) + (d*0.0001*farcoc*vec2(screen_res.y/screen_res.x, 1.0));
-
-				float weight = (texture(rt_coc, coord).r / 5.0);
-				vec4 samp = texture(rt_tex, coord) /* * weight */;
-				{
-					brightest = max(brightest, samp.rgb);
-				}
-			}
+	float farcoc = texture(rt_far, screen_pos*0.5+0.5).a;
+	fragfar = texture(rt_far, screen_pos*0.5+0.5);
+	for (int y = 0; y < 4; ++y) {
+		for (int x = 0; x < 4; ++x) {
+			vec2 d = square_to_disk(vec2(-0.5) + vec2(x, y)/vec2(3.0));
+			vec2 coord = (screen_pos*0.5+0.5) + (d*0.0001*farcoc*vec2(screen_res.y/screen_res.x, 1.0));
+			vec4 samp = texture(rt_far, coord);
+			fragfar = max(fragfar, samp);
 		}
-		// frag = mix(texture(rt_tex, screen_pos*0.5+0.5).rgb, brightest, farcoc / 50.0);
-		frag = brightest;
-		// frag = texture(rt_tex, screen_pos*0.5+0.5).rgb;
-	} else {
-		frag = texture(rt_tex, screen_pos*0.5+0.5).rgb;
 	}
-	
-	// frag = texture(rt_tex, screen_pos*0.5+0.5).rgb;
 
-	// frag = vec3(1.0, 0.0, 0.0);
-	// frag = vec3(texture(rt_tex, screen_pos*0.5+0.5).a, 0.0, 0.0)/100.0;
+	float nearcoc = texture(rt_near, screen_pos*0.5+0.5).a;
+	fragnear = texture(rt_near, screen_pos*0.5+0.5);
+	for (int y = 0; y < 4; ++y) {
+		for (int x = 0; x < 4; ++x) {
+			vec2 d = square_to_disk(vec2(-0.5) + vec2(x, y)/vec2(3.0));
+			vec2 coord = (screen_pos*0.5+0.5) + (d*0.0004*nearcoc*vec2(screen_res.y/screen_res.x, 1.0));
+			vec4 samp = texture(rt_near, coord);
+			fragnear = max(fragnear, samp);
+		}
+	}
+
+	// fragfar = texture(rt_far, screen_pos*0.5+0.5);
+	// fragnear = texture(rt_near, screen_pos*0.5+0.5);
 }
